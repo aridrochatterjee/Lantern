@@ -1,0 +1,5 @@
+out/
+data/history.csv
+*.class
+# Lantern Agent secret
+data/agent.token

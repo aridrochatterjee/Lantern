@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Lantern v10 — Network Observatory</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0d0a'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23b6ff3c'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23b6ff3c' stroke-width='1.5' opacity='0.5'/%3E%3C/svg%3E">
+
+<style>
+
+/* ============================================================
+
+   TOKENS — phosphor-scope palette: this is a LAN scanner, so
+
+   black+lime reads as a CRT/radar readout, not decoration.
+
+   ============================================================ */
+
+:root{
+
+  --bg:        #0a0d0a;
+
+  --bg-panel:  #0e120e;
+
+  --bg-raised: #131a12;
+
+  --line:      #1f2b1c;
+
+  --line-soft: #182118;
+
+  --lime:      #b6ff3c;
+
+  --lime-dim:  #7a9c3f;
+
+  --lime-glow: rgba(182,255,60,0.18);
+
+  --amber:     #ffb020;
+
+  --red:       #ff5a5a;
+
+  --blue:      #6ecbff;
+
+  --text:      #d9f2cf;
+
+  --text-dim:  #7f947a;
+
+  --text-mute: #4c5c48;
+
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+
+  --radius: 3px;
+
+}
+
+
+
+*{ box-sizing: border-box; }
+
+html,body{ height:100%; }
+
+body{
+
+  margin:0;
+
+  background:
+
+    linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0/100% 28px,
+
+    var(--bg);
+
+  color:var(--text);
+
+  font-family:var(--mono);
+
+  font-size:13px;
+
+  line-height:1.5;
+
+  -webkit-font-smoothing:antialiased;
+
+}
+
+@media (prefers-reduced-motion: reduce){
+
+  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+
+}
+
+::selection{ background:var(--lime); color:#0a0d0a; }
+
+a{ color:var(--lime); }
+
+button, select, input{ font-family:inherit; font-size:inherit; color:inherit; }
+
+:focus-visible{ outline:2px solid var(--lime); outline-offset:1px; }
+
+::-webkit-scrollbar{ width:10px; height:10px; }
+
+::-webkit-scrollbar-track{ background:var(--bg-panel); }
+
+::-webkit-scrollbar-thumb{ background:var(--line); border-radius:5px; }
+
+::-webkit-scrollbar-thumb:hover{ background:var(--lime-dim); }
+
+
+
+.shell{ max-width:1400px; margin:0 auto; padding:18px 20px 40px; }
+
+
+
+/* ---------- header / hero ---------- */
+
+header.top{
+
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+
+  padding:14px 18px; border:1px solid var(--line); border-radius:var(--radius);
+
+  background:var(--bg-panel); flex-wrap:wrap;
+
+}
+
+.brand{ display:flex; align-items:center; gap:12px; }
+
+.brand-mark{ position:relative; width:34px; height:34px; flex:none; }
+
+.brand-mark .core{
+
+  position:absolute; inset:11px; border-radius:50%; background:var(--lime);
+
+  box-shadow:0 0 10px 1px var(--lime-glow);
+
+}
+
+.brand-mark .ring{
+
+  position:absolute; inset:0; border-radius:50%;
+
+  background: conic-gradient(from 0deg, var(--lime) 0deg, transparent 55deg, transparent 360deg);
+
+  opacity:0.55;
+
+  animation: sweep 2.6s linear infinite;
+
+}
+
+@keyframes sweep{ to{ transform:rotate(360deg); } }
+
+.brand h1{
+
+  font-family:var(--sans); font-weight:800; letter-spacing:-0.01em;
+
+  font-size:19px; margin:0; color:var(--text);
+
+}
+
+.brand p{ margin:1px 0 0; font-size:11.5px; color:var(--text-dim); }
+
+.top-status{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+
+.status-pill{
+
+  display:flex; align-items:center; gap:7px; padding:5px 10px;
+
+  border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-raised);
+
+  font-size:11.5px; color:var(--text-dim);
+
+}
+
+.dot{ width:7px; height:7px; border-radius:50%; background:var(--text-mute); flex:none; }
+
+.dot.live{ background:var(--lime); box-shadow:0 0 6px 1px var(--lime-glow); animation:pulse 1.8s ease-in-out infinite; }
+
+.dot.down{ background:var(--red); }
+
+@keyframes pulse{ 0%,100%{ opacity:1;} 50%{ opacity:0.35;} }
+
+.controls{ display:flex; align-items:center; gap:8px; }
+
+.btn{
+
+  background:var(--bg-raised); border:1px solid var(--line); color:var(--text);
+
+  border-radius:var(--radius); padding:6px 11px; cursor:pointer; font-size:11.5px;
+
+}
+
+.btn:hover{ border-color:var(--lime-dim); color:var(--lime); }
+
+.btn.primary{ border-color:var(--lime-dim); color:var(--lime); }
+
+select.ctl{
+
+  background:var(--bg-raised); border:1px solid var(--line); color:var(--text);
+
+  border-radius:var(--radius); padding:6px 8px; font-size:11.5px;
+
+}
+
+
+
+/* ---------- stat strip ---------- */
+
+.stats{
+
+  display:grid; grid-template-columns:repeat(5,1fr);
+
+  border:1px solid var(--line); border-radius:var(--radius);
+
+  background:var(--bg-panel); margin-top:12px; overflow:hidden;
+
+}
+
+.stat{ padding:12px 16px; border-right:1px solid var(--line); }
+
+.stat:last-child{ border-right:none; }
+
+.stat .n{ font-size:24px; font-weight:600; color:var(--lime); line-height:1; }
+
+.stat .l{ margin-top:6px; font-size:10.5px; color:var(--text-dim); letter-spacing:0.03em; }
+
+@media (max-width:820px){ .stats{ grid-template-columns:repeat(2,1fr);} .stat:nth-child(2n){border-right:none;} .stat{border-bottom:1px solid var(--line);} }
+
+
+
+/* ---------- toolbar ---------- */
+
+.toolbar{
+
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+
+  margin-top:12px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius);
+
+  background:var(--bg-panel);
+
+}
+
+.toolbar input[type=text]{
+
+  background:var(--bg-raised); border:1px solid var(--line); color:var(--text);
+
+  border-radius:var(--radius); padding:6px 9px; font-size:12px; min-width:190px; flex:1 1 190px;
+
+}
+
+.toolbar input[type=text]::placeholder{ color:var(--text-mute); }
+
+.toolbar label.chk{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-dim); cursor:pointer; }
+
+.match-count{ margin-left:auto; font-size:11px; color:var(--text-dim); }
+
+
+
+/* ---------- main grid ---------- */
+
+.main{ display:grid; grid-template-columns:1fr 340px; gap:12px; margin-top:12px; align-items:start; }
+
+@media (max-width:980px){ .main{ grid-template-columns:1fr; } }
+
+
+
+.panel{ border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-panel); overflow:hidden; }
+
+.panel > .head{
+
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+
+  padding:9px 12px; border-bottom:1px solid var(--line); background:var(--bg-raised);
+
+  font-size:11px; color:var(--text-dim); letter-spacing:0.03em;
+
+}
+
+.panel > .head b{ color:var(--text); font-weight:600; letter-spacing:0; }
+
+
+
+/* device table */
+
+.table-wrap{ max-height:70vh; overflow:auto; }
+
+table{ width:100%; border-collapse:collapse; font-size:12px; }
+
+thead th{
+
+  position:sticky; top:0; z-index:1; text-align:left; font-weight:600;
+
+  color:var(--text-dim); background:var(--bg-raised); padding:8px 10px;
+
+  border-bottom:1px solid var(--line); cursor:pointer; user-select:none; white-space:nowrap;
+
+}
+
+thead th:hover{ color:var(--lime); }
+
+thead th .arrow{ color:var(--lime); margin-left:3px; }
+
+tbody td{ padding:8px 10px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+
+tbody tr.dev-row{ cursor:pointer; }
+
+tbody tr.dev-row:hover{ background:var(--bg-raised); }
+
+tbody tr.dev-row.open{ background:var(--bg-raised); }
+
+.name-cell b{ color:var(--text); font-weight:600; }
+
+.name-cell .sub{ display:block; color:var(--text-mute); font-size:10.5px; margin-top:1px; }
+
+.status-tag{ display:inline-flex; align-items:center; gap:6px; }
+
+.badge{
+
+  display:inline-block; padding:1px 6px; margin:0 3px 3px 0; border-radius:var(--radius);
+
+  border:1px solid var(--line); font-size:10.5px; color:var(--text-dim); background:var(--bg);
+
+}
+
+.badge.agent{ color:var(--blue); border-color:#233a4a; }
+
+.chev{ color:var(--text-mute); font-size:10px; }
+
+tr.dev-row.open .chev{ color:var(--lime); }
+
+
+
+/* expanded detail */
+
+tr.detail-row td{ padding:0; border-bottom:1px solid var(--line); }
+
+.detail{ padding:14px 16px 16px 34px; background:var(--bg); }
+
+.detail-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px 22px; }
+
+.dgroup h4{ margin:0 0 6px; font-size:10.5px; color:var(--lime-dim); letter-spacing:0.04em; font-weight:600; }
+
+.dgroup dl{ margin:0; display:grid; grid-template-columns:auto 1fr; gap:3px 10px; }
+
+.dgroup dt{ color:var(--text-dim); }
+
+.dgroup dd{ margin:0; color:var(--text); word-break:break-word; }
+
+.barline{height:5px;background:var(--line-soft);border-radius:999px;overflow:hidden;margin-top:5px}.barline i{display:block;height:100%;background:var(--lime);border-radius:999px;box-shadow:0 0 8px var(--lime-glow)}
+.proc-table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:11px; }
+
+.proc-table th{ text-align:left; color:var(--text-mute); font-weight:500; padding:2px 6px 2px 0; }
+
+.proc-table td{ padding:2px 6px 2px 0; color:var(--text-dim); border-top:1px solid var(--line-soft); }
+
+details.raw{ margin-top:12px; }
+
+details.raw summary{ cursor:pointer; color:var(--text-dim); font-size:11px; }
+
+details.raw summary:hover{ color:var(--lime); }
+
+details.raw pre{
+
+  margin:8px 0 0; padding:10px; background:var(--bg-panel); border:1px solid var(--line);
+
+  border-radius:var(--radius); font-size:11px; color:var(--text-dim); overflow:auto; max-height:260px;
+
+}
+
+
+
+.empty{ padding:34px 20px; text-align:center; color:var(--text-dim); font-size:12px; }
+
+.empty b{ display:block; color:var(--text); font-size:13px; margin-bottom:4px; }
+
+
+
+/* events feed */
+
+.events-wrap{ max-height:70vh; overflow:auto; padding:4px 0; }
+
+.ev{ display:flex; gap:9px; padding:7px 12px; border-bottom:1px solid var(--line-soft); font-size:11.5px; }
+
+.ev .glyph{ flex:none; width:14px; text-align:center; font-weight:700; }
+
+.ev.appeared .glyph{ color:var(--lime); }
+
+.ev.disappeared .glyph{ color:var(--red); }
+
+.ev.changed .glyph{ color:var(--amber); }
+
+.ev.other .glyph{ color:var(--text-mute); }
+
+.ev .body{ flex:1; min-width:0; }
+
+.ev .t{ color:var(--text-mute); font-size:10px; }
+
+.ev .d{ color:var(--text); word-break:break-word; }
+
+.ev .m{ color:var(--text-dim); font-size:11px; }
+
+.ev.flash{ animation:flash 1.4s ease-out; }
+
+@keyframes flash{ 0%{ background:var(--lime-glow);} 100%{ background:transparent; } }
+
+.chips{ display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+
+.chip{
+
+  padding:3px 8px; border:1px solid var(--line); border-radius:12px; font-size:10.5px;
+
+  color:var(--text-dim); cursor:pointer; background:var(--bg-raised);
+
+}
+
+.chip.active{ color:var(--lime); border-color:var(--lime-dim); }
+
+
+
+/* footer / network strip */
+
+footer.net{
+
+  margin-top:12px; display:flex; flex-wrap:wrap; gap:18px; align-items:center;
+
+  border:1px solid var(--line); border-radius:var(--radius); background:var(--bg-panel);
+
+  padding:10px 16px; font-size:11px; color:var(--text-dim);
+
+}
+
+footer.net .fact b{ color:var(--text); }
+
+footer.net .spacer{ flex:1; }
+
+
+
+.banner{
+
+  display:none; margin-top:12px; padding:9px 13px; border:1px solid #4a1f1f; border-radius:var(--radius);
+
+  background:#160d0d; color:#ffb3b3; font-size:12px;
+
+}
+
+.banner.show{ display:block; }
+
+.mini-btn{background:transparent;color:var(--lime);border:1px solid var(--line-strong);padding:5px 8px;border-radius:5px;font:600 10px/1 ui-monospace,monospace;letter-spacing:.04em;cursor:pointer}.mini-btn:hover{background:var(--lime);color:#050805}
+</style>
+
+</head>
+
+<body>
+
+<div class="shell">
+
+
+
+  <header class="top">
+
+    <div class="brand">
+
+      <div class="brand-mark"><div class="ring"></div><div class="core"></div></div>
+
+      <div>
+
+        <h1>LANTERN</h1>
+
+        <p>Local network observatory</p>
+
+      </div>
+
+    </div>
+
+    <div class="top-status">
+
+      <div class="status-pill"><span class="dot" id="connDot"></span><span id="connLabel">connecting…</span></div>
+
+      <div class="status-pill">updated <span id="lastUpdated" style="color:var(--text);margin-left:4px;">—</span></div>
+
+      <div class="controls">
+
+        <select class="ctl" id="intervalSel" title="Refresh interval">
+
+          <option value="2000">every 2s</option>
+
+          <option value="5000" selected>every 5s</option>
+
+          <option value="10000">every 10s</option>
+
+          <option value="30000">every 30s</option>
+
+        </select>
+
+        <button class="btn" id="pauseBtn">Pause</button>
+
+        <button class="btn primary" id="refreshBtn">Refresh now</button>
+
+      </div>
+
+    </div>
+
+  </header>
+
+
+
+  <div class="stats" id="stats">
+
+    <div class="stat"><div class="n" id="statDevices">—</div><div class="l">devices seen</div></div>
+
+    <div class="stat"><div class="n" id="statOnline">—</div><div class="l">online now</div></div>
+
+    <div class="stat"><div class="n" id="statServices">—</div><div class="l">services detected</div></div>
+
+    <div class="stat"><div class="n" id="statAgents">—</div><div class="l">agents paired</div></div>
+
+    <div class="stat"><div class="n" id="statEvents">—</div><div class="l">recent events</div></div>
+
+  </div>
+
+
+
+  <div class="banner" id="banner"></div>
+
+
+
+  <div class="toolbar">
+
+    <input type="text" id="search" placeholder="search name, IP, MAC, vendor…">
+
+    <select class="ctl" id="typeFilter"><option value="all">all types</option></select>
+
+    <select class="ctl" id="statusFilter" style="display:none"><option value="all">all status</option><option value="online">online</option><option value="offline">offline</option></select>
+
+    <label class="chk"><input type="checkbox" id="agentOnly"> agents only</label>
+
+    <span class="match-count" id="matchCount"></span>
+
+  </div>
+
+
+
+  <div class="main">
+
+    <section class="panel">
+
+      <div class="head"><b>Devices</b><span id="tableHint">click a row for full detail</span></div>
+
+      <div class="table-wrap">
+
+        <table id="devTable">
+
+          <thead>
+
+            <tr>
+
+              <th data-key="status" style="width:26px"></th>
+
+              <th data-key="name">Device</th>
+
+              <th data-key="ip">IP</th>
+
+              <th data-key="mac">MAC</th>
+
+              <th data-key="vendor">Vendor</th>
+
+              <th data-key="type">Type</th>
+
+              <th data-key="latency">Latency</th>
+
+              <th data-key="services">Services</th>
+
+              <th style="width:18px"></th>
+
+            </tr>
+
+          </thead>
+
+          <tbody id="devBody"></tbody>
+
+        </table>
+
+        <div class="empty" id="devEmpty" style="display:none">
+
+          <b>No devices yet</b>
+
+          waiting on the first scan from Lantern Core
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+
+    <section class="panel">
+
+      <div class="head"><b>Events</b><span id="evCount"></span></div>
+
+      <div class="chips" id="evChips">
+
+        <span class="chip active" data-t="all">all</span>
+
+        <span class="chip" data-t="appeared">appeared</span>
+
+        <span class="chip" data-t="disappeared">disappeared</span>
+
+        <span class="chip" data-t="changed">changed</span>
+
+      </div>
+
+      <div class="events-wrap" id="evWrap">
+
+        <div class="empty" id="evEmpty">
+
+          <b>No events yet</b>
+
+          appear/disappear/change events will show up here
+
+        </div>
+
+      </div>
+
+    </section>
+
+  </div>
+
+
+
+  <footer class="net" id="netStrip">
+
+    <span class="fact">subnet <b id="netSubnet">—</b></span>
+
+    <span class="fact">interface <b id="netIface">—</b></span>
+
+    <span class="fact">local IP <b id="netLocal">—</b></span>
+
+    <span class="fact">gateway <b id="netGw">—</b></span>
+
+    <span class="spacer"></span>
+
+    <span class="fact">Lantern v10 · dashboard <b id="netOrigin">—</b></span>
+
+  </footer>
+
+
+
+</div>
+
+
+
+<script>
+
+(function(){
+
+"use strict";
+
+
+
+/* ============================================================
+
+   CONFIG — same-origin endpoints served by Lantern's WebDashboard
+
+   ============================================================ */
+
+var API = { devices: "/api/devices", network: "/api/network", events: "/api/events" };
+
+
+
+var state = {
+
+  devices: [], network: {}, events: [],
+
+  search: "", type: "all", status: "all", agentOnly: false, evFilter: "all",
+
+  sortKey: "name", sortDir: "asc",
+
+  expanded: new Set(),
+
+  seenEventKeys: new Set(), firstEventLoad: true,
+
+  paused: false, pollMs: 5000, timer: null,
+
+  connected: null
+
+};
+
+
+
+/* ---------- generic helpers ---------- */
+
+function qs(s, r){ return (r||document).querySelector(s); }
+
+function qsa(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
+
+function escapeHtml(v){
+
+  return String(v).replace(/[&<>"']/g, function(c){
+
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+
+  });
+
+}
+
+function isObj(v){ return v !== null && typeof v === "object" && !Array.isArray(v); }
+
+
+
+/* Pull the first present value among several possible key spellings —
+
+   the exact JSON field names Lantern Core emits aren't pinned down here,
+
+   so every reader is deliberately schema-tolerant instead of guessing once. */
+
+function pick(obj, keys){
+
+  if (!isObj(obj)) return undefined;
+
+  var lower = {};
+
+  Object.keys(obj).forEach(function(k){ lower[k.toLowerCase()] = obj[k]; });
+
+  for (var i = 0; i < keys.length; i++){
+
+    var k = keys[i].toLowerCase();
+
+    if (lower[k] !== undefined && lower[k] !== null && lower[k] !== "") return lower[k];
+
+  }
+
+  return undefined;
+
+}
+
+function truthy(v){
+
+  if (typeof v === "boolean") return v;
+
+  if (typeof v === "number") return v !== 0;
+
+  if (typeof v === "string") return /^(true|online|up|active|reachable|yes|1)$/i.test(v.trim());
+
+  return !!v;
+
+}
+
+function falsyKnown(v){
+
+  if (typeof v === "boolean") return v === false;
+
+  if (typeof v === "string") return /^(false|offline|down|inactive|unreachable|no|0)$/i.test(v.trim());
+
+  return false;
+
+}
+
+
+
+/* ---------- field readers (device) ---------- */
+
+function nameOf(d){ return pick(d, ["hostname","name","deviceName","host"]); }
+
+function ipOf(d){ return pick(d, ["ip","ipAddress","address","ipv4"]); }
+
+function macOf(d){ return pick(d, ["mac","macAddress","hwAddress"]); }
+
+function vendorOf(d){ return pick(d, ["vendor","manufacturer","oui","vendorName"]); }
+
+function typeOf(d){ return pick(d, ["type","deviceType","classification","category","kind"]) || "unclassified"; }
+
+function latencyOf(d){ return pick(d, ["latency","latencyMs","rtt","rttMs","pingMs","responseTime"]); }
+
+function lastSeenOf(d){ return pick(d, ["lastSeen","last_seen","updatedAt","seenAt","timestamp"]); }
+
+function servicesOf(d){
+
+  var s = pick(d, ["services","openPorts","ports","detectedServices"]);
+
+  if (Array.isArray(s)) return s;
+
+  return [];
+
+}
+
+function agentOf(d){
+
+  var a = pick(d, ["agent","agentData","agentTelemetry","agentInfo"]);
+
+  return isObj(a) ? a : null;
+
+}
+
+function statusOf(d){
+
+  var v = pick(d, ["online","status","isOnline","reachable","up","state"]);
+
+  if (v === undefined) return "unknown";
+
+  if (truthy(v)) return "online";
+
+  if (falsyKnown(v)) return "offline";
+
+  return "unknown";
+
+}
+
+function ipToNum(ip){
+
+  if (typeof ip !== "string") return null;
+
+  var m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+
+  if (!m) return null;
+
+  return (+m[1]*16777216) + (+m[2]*65536) + (+m[3]*256) + (+m[4]);
+
+}
+
+function fmtLatency(v){
+
+  if (v === undefined || v === null || v === "") return "—";
+
+  var n = parseFloat(v);
+
+  return isNaN(n) ? String(v) : (Math.round(n*10)/10) + " ms";
+
+}
+
+function fmtTime(v){
+
+  if (!v) return "—";
+
+  var d = new Date(v);
+
+  if (isNaN(d.getTime())) return String(v);
+
+  return d.toLocaleTimeString();
+
+}
+
+function deviceKey(d, idx){
+
+  return (ipOf(d) || macOf(d) || nameOf(d) || ("idx" + idx));
+
+}
+
+
+
+/* ---------- field readers (agent sub-object) ---------- */
+
+function agentFields(a){
+  return {
+    hostname: pick(a,["hostname","host","deviceName"]), os: pick(a,["os","osName","platform"]),
+    kernel: pick(a,["kernel","kernelVersion"]), arch: pick(a,["arch","architecture"]),
+    hardware: pick(a,["hardwareModel","hardware","model"]), cpuModel: pick(a,["cpuModel","processor","cpuName"]),
+    cpuLoad: pick(a,["cpuLoad","cpuLoadPercent","load"]), cores: pick(a,["cores","cpuCores","coreCount"]), gpu: pick(a,["gpu","graphics"]),
+    memoryTotal: pick(a,["memoryTotalBytes","memoryTotal"]), memoryUsed: pick(a,["memoryUsedBytes","memoryUsed"]), memoryAvailable: pick(a,["memoryAvailableBytes","memoryAvailable"]),
+    diskTotal: pick(a,["diskTotalBytes","diskTotal"]), diskUsed: pick(a,["diskUsedBytes","diskUsed"]), diskFree: pick(a,["diskFreeBytes","diskFree"]),
+    uptime: pick(a,["uptimeSeconds","uptime","upSince"]), battery: pick(a,["batteryPercent","battery","batteryLevel"]),
+    user: pick(a,["loggedInUser","user","username"]), java: pick(a,["javaVersion","java"]), receivedAt: pick(a,["receivedAt","timestamp"]),
+    interfaces: pick(a,["interfaces","networkInterfaces","ifaces"]), processes: pick(a,["processes","processList","procList"]), adminPermissions: pick(a,["adminPermissions","permissions"])
+  };
+}
+function fmtBytes(v){ var n=Number(v); if(!isFinite(n)||n<0)return "—"; var u=["B","KB","MB","GB","TB"],i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;} return (n>=100?Math.round(n):Math.round(n*10)/10)+" "+u[i]; }
+function fmtUptime(v){ var n=Number(v); if(!isFinite(n)||n<0)return "—"; var d=Math.floor(n/86400);n%=86400;var h=Math.floor(n/3600);n%=3600;var m=Math.floor(n/60);return (d?d+"d ":"")+(h?h+"h ":"")+m+"m"; }
+function pct(v){ var n=Number(v); return isFinite(n)?Math.max(0,Math.min(100,n)):0; }
+
+
+
+/* ---------- field readers (event) ---------- */
+
+function evType(e){
+
+  var t = pick(e, ["type","eventType","kind","action"]);
+
+  t = (t || "").toString().toLowerCase();
+
+  if (/appear|new|join/.test(t)) return "appeared";
+
+  if (/disappear|leave|gone|remov/.test(t)) return "disappeared";
+
+  if (/change|updat/.test(t)) return "changed";
+
+  return "other";
+
+}
+
+function evDevice(e){ return typeof e === "string" ? e : pick(e, ["ip","deviceIp","name","hostname","device"]); }
+
+function evMessage(e){ return typeof e === "string" ? "" : pick(e, ["message","description","detail","summary"]); }
+
+function evTime(e){ return typeof e === "string" ? "" : pick(e, ["timestamp","time","ts","date","occurredAt"]); }
+
+function evKey(e, idx){ return (evTime(e) || "") + "|" + (evDevice(e) || "") + "|" + evType(e) + "|" + idx; }
+
+
+
+/* ============================================================
+
+   FETCH
+
+   ============================================================ */
+
+function fetchJSON(url){
+
+  return fetch(url, { cache: "no-store" }).then(function(r){
+
+    if (!r.ok) throw new Error(url + " -> " + r.status);
+
+    return r.json();
+
+  });
+
+}
+
+function asArray(v){
+
+  if (Array.isArray(v)) return v;
+
+  if (isObj(v)){
+
+    var arr = pick(v, ["devices","items","results","list","events","data"]);
+
+    if (Array.isArray(arr)) return arr;
+
+  }
+
+  return [];
+
+}
+
+
+
+function pollOnce(){
+
+  return Promise.allSettled([
+
+    fetchJSON(API.devices), fetchJSON(API.network), fetchJSON(API.events)
+
+  ]).then(function(res){
+
+    var okAny = false;
+
+    if (res[0].status === "fulfilled"){ state.devices = asArray(res[0].value); okAny = true; }
+
+    if (res[1].status === "fulfilled"){ state.network = isObj(res[1].value) ? res[1].value : {}; okAny = true; }
+
+    if (res[2].status === "fulfilled"){ state.events = asArray(res[2].value); okAny = true; }
+
+    setConnected(okAny);
+
+    render();
+
+  });
+
+}
+
+
+
+function setConnected(ok){
+
+  state.connected = ok;
+
+  var dot = qs("#connDot"), label = qs("#connLabel"), banner = qs("#banner");
+
+  if (ok){
+
+    dot.className = "dot live"; label.textContent = "live";
+
+    banner.className = "banner";
+
+  } else {
+
+    dot.className = "dot down"; label.textContent = "unreachable";
+
+    banner.className = "banner show";
+
+    banner.textContent = "Can't reach the Lantern API on this origin (" + API.devices + ", " + API.network + ", " + API.events + "). Showing the last known data — check that Lantern Core is running and this page is served from its dashboard.";
+
+  }
+
+  qs("#lastUpdated").textContent = new Date().toLocaleTimeString();
+
+}
+
+
+
+/* ============================================================
+
+   RENDER
+
+   ============================================================ */
+
+function render(){
+
+  renderStats();
+
+  renderFilterOptions();
+
+  renderTable();
+
+  renderEvents();
+
+  renderNetwork();
+
+}
+
+
+
+function renderStats(){
+
+  var devices = state.devices;
+
+  var known = devices.some(function(d){ return statusOf(d) !== "unknown"; });
+
+  var online = devices.filter(function(d){ return statusOf(d) === "online"; }).length;
+
+  var svc = devices.reduce(function(sum, d){ return sum + servicesOf(d).length; }, 0);
+
+  var agents = devices.filter(function(d){ return !!agentOf(d); }).length;
+
+
+
+  qs("#statDevices").textContent = devices.length;
+
+  qs("#statOnline").textContent = known ? online : "—";
+
+  qs("#statServices").textContent = svc;
+
+  qs("#statAgents").textContent = agents;
+
+  qs("#statEvents").textContent = state.events.length;
+
+}
+
+
+
+function renderFilterOptions(){
+
+  var typeSel = qs("#typeFilter");
+
+  var types = Array.from(new Set(state.devices.map(typeOf))).sort();
+
+  var cur = typeSel.value || "all";
+
+  typeSel.innerHTML = '<option value="all">all types</option>' +
+
+    types.map(function(t){ return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>'; }).join("");
+
+  typeSel.value = types.indexOf(cur) >= 0 ? cur : "all";
+
+  state.type = typeSel.value;
+
+
+
+  var anyKnownStatus = state.devices.some(function(d){ return statusOf(d) !== "unknown"; });
+
+  qs("#statusFilter").style.display = anyKnownStatus ? "" : "none";
+
+}
+
+
+
+function filteredSortedDevices(){
+
+  var s = state.search.trim().toLowerCase();
+
+  var list = state.devices.filter(function(d){
+
+    if (state.type !== "all" && typeOf(d) !== state.type) return false;
+
+    if (state.status !== "all" && statusOf(d) !== state.status) return false;
+
+    if (state.agentOnly && !agentOf(d)) return false;
+
+    if (s){
+
+      var hay = [nameOf(d), ipOf(d), macOf(d), vendorOf(d), typeOf(d)].filter(Boolean).join(" ").toLowerCase();
+
+      if (hay.indexOf(s) === -1) return false;
+
+    }
+
+    return true;
+
+  });
+
+
+
+  var key = state.sortKey, dir = state.sortDir === "asc" ? 1 : -1;
+
+  list.sort(function(a, b){
+
+    var av, bv;
+
+    if (key === "ip"){ av = ipToNum(ipOf(a)); bv = ipToNum(ipOf(b));
+
+      if (av === null) av = -1; if (bv === null) bv = -1;
+
+    } else if (key === "latency"){
+
+      av = parseFloat(latencyOf(a)); bv = parseFloat(latencyOf(b));
+
+      if (isNaN(av)) av = Infinity; if (isNaN(bv)) bv = Infinity;
+
+    } else if (key === "lastSeen"){
+
+      av = new Date(lastSeenOf(a) || 0).getTime(); bv = new Date(lastSeenOf(b) || 0).getTime();
+
+    } else if (key === "status"){
+
+      av = statusOf(a); bv = statusOf(b);
+
+    } else {
+
+      av = (nameOf(a) || ipOf(a) || "").toString().toLowerCase();
+
+      bv = (nameOf(b) || ipOf(b) || "").toString().toLowerCase();
+
+    }
+
+    if (av < bv) return -1 * dir;
+
+    if (av > bv) return 1 * dir;
+
+    return 0;
+
+  });
+
+  return list;
+
+}
+
+
+
+function renderTable(){
+
+  var body = qs("#devBody");
+
+  var list = filteredSortedDevices();
+
+  qs("#matchCount").textContent = list.length + " of " + state.devices.length + " devices";
+
+  qs("#devEmpty").style.display = state.devices.length ? "none" : "block";
+
+
+
+  var rows = [];
+
+  list.forEach(function(d, i){
+
+    var key = deviceKey(d, i);
+
+    var st = statusOf(d);
+
+    var dotColor = st === "online" ? "var(--lime)" : st === "offline" ? "var(--red)" : "var(--text-mute)";
+
+    var nm = nameOf(d);
+
+    var ip = ipOf(d);
+
+    var svcArr = servicesOf(d);
+
+    var svcBadges = svcArr.slice(0, 4).map(function(s){
+
+      var label = isObj(s) ? ((s.port || s.number || "") + (s.name || s.service ? "/" + (s.name || s.service) : "")) : s;
+
+      return '<span class="badge">' + escapeHtml(label) + '</span>';
+
+    }).join("");
+
+    if (svcArr.length > 4) svcBadges += '<span class="badge">+' + (svcArr.length - 4) + '</span>';
+
+    var agentBadge = agentOf(d) ? '<span class="badge agent">agent</span>' : "";
+
+    var open = state.expanded.has(key);
+
+
+
+    rows.push(
+
+      '<tr class="dev-row' + (open ? ' open' : '') + '" data-key="' + escapeHtml(key) + '">' +
+
+        '<td><span class="dot" style="background:' + dotColor + (st==="online" ? ';box-shadow:0 0 6px 1px var(--lime-glow)' : '') + '"></span></td>' +
+
+        '<td class="name-cell"><b>' + escapeHtml(nm || ip || "unknown device") + '</b>' +
+
+          (nm && ip ? '<span class="sub">' + escapeHtml(ip) + '</span>' : '') + '</td>' +
+
+        '<td>' + escapeHtml(ip || "—") + '</td>' +
+
+        '<td>' + escapeHtml(macOf(d) || "—") + '</td>' +
+
+        '<td>' + escapeHtml(vendorOf(d) || "—") + '</td>' +
+
+        '<td>' + escapeHtml(typeOf(d)) + '</td>' +
+
+        '<td>' + escapeHtml(fmtLatency(latencyOf(d))) + '</td>' +
+
+        '<td>' + (svcBadges || agentBadge ? svcBadges + agentBadge : "—") + '</td>' +
+
+        '<td class="chev">' + (open ? "▾" : "▸") + '</td>' +
+
+      '</tr>'
+
+    );
+
+    if (open){
+
+      rows.push('<tr class="detail-row" data-key="' + escapeHtml(key) + '"><td colspan="9"><div class="detail">' + buildDetailHTML(d) + '</div></td></tr>');
+
+    }
+
+  });
+
+  body.innerHTML = rows.join("");
+
+}
+
+
+
+function buildDetailHTML(d){
+
+  var html = '<div class="detail-grid">';
+
+
+
+  html += '<div class="dgroup"><h4>Identity</h4><dl>' +
+
+    '<dt>name</dt><dd>' + escapeHtml(nameOf(d) || "—") + '</dd>' +
+
+    '<dt>ip</dt><dd>' + escapeHtml(ipOf(d) || "—") + '</dd>' +
+
+    '<dt>mac</dt><dd>' + escapeHtml(macOf(d) || "—") + '</dd>' +
+
+    '<dt>vendor</dt><dd>' + escapeHtml(vendorOf(d) || "—") + '</dd>' +
+
+    '<dt>type</dt><dd>' + escapeHtml(typeOf(d)) + '</dd>' +
+
+    '<dt>status</dt><dd>' + escapeHtml(statusOf(d)) + '</dd>' +
+
+    '<dt>discovered</dt><dd>' + escapeHtml(fmtTime(pick(d,["discoveredAt","discovered_at","firstSeen"]))) + '</dd>' +
+
+  '</dl></div>';
+
+
+
+  html += '<div class="dgroup"><h4>Timing</h4><dl>' +
+
+    '<dt>latency</dt><dd>' + escapeHtml(fmtLatency(latencyOf(d))) + '</dd>' +
+
+    '<dt>last seen</dt><dd>' + escapeHtml(fmtTime(lastSeenOf(d))) + '</dd>' +
+
+  '</dl></div>';
+
+
+
+  var svcArr = servicesOf(d);
+
+  html += '<div class="dgroup"><h4>Services (' + svcArr.length + ')</h4>';
+
+  if (svcArr.length){
+
+    html += svcArr.map(function(s){
+
+      var label = isObj(s) ? ((s.port || s.number || "?") + (s.name || s.service ? " " + (s.name || s.service) : "")) : s;
+
+      return '<span class="badge" title="' + escapeHtml(isObj(s)?(pick(s,["banner","response","server"])||JSON.stringify(s)):s) + '">' + escapeHtml(label) + '</span>';
+
+    }).join(" ");
+
+  } else {
+
+    html += '<span style="color:var(--text-mute)">none detected</span>';
+
+  }
+
+  html += '</div>';
+
+
+
+  var agent = agentOf(d);
+
+  if (agent){
+    var af=agentFields(agent);
+    html+='<div class="dgroup"><h4>Authorized agent</h4><dl>'+
+      (af.hostname?'<dt>agent host</dt><dd>'+escapeHtml(af.hostname)+'</dd>':'')+
+      (af.os?'<dt>os</dt><dd>'+escapeHtml(af.os)+(af.arch?' ('+escapeHtml(af.arch)+')':'')+'</dd>':'')+
+      (af.kernel?'<dt>kernel</dt><dd>'+escapeHtml(af.kernel)+'</dd>':'')+
+      (af.hardware?'<dt>hardware</dt><dd>'+escapeHtml(af.hardware)+'</dd>':'')+
+      (af.cpuModel?'<dt>cpu</dt><dd>'+escapeHtml(af.cpuModel)+(af.cores?' · '+escapeHtml(af.cores)+' cores':'')+'</dd>':'')+
+      (af.gpu?'<dt>gpu</dt><dd>'+escapeHtml(af.gpu)+'</dd>':'')+
+      (af.user?'<dt>user</dt><dd>'+escapeHtml(af.user)+'</dd>':'')+
+      (af.java?'<dt>java</dt><dd>'+escapeHtml(af.java)+'</dd>':'')+
+      (af.battery!==undefined&&af.battery!==null&&Number(af.battery)>=0?'<dt>battery</dt><dd>'+escapeHtml(af.battery)+'%</dd>':'')+
+      (af.uptime!==undefined?'<dt>uptime</dt><dd>'+escapeHtml(fmtUptime(af.uptime))+'</dd>':'')+
+    '</dl></div>';
+    html+='<div class="dgroup"><h4>Resources</h4>'+      (af.cpuLoad!==undefined&&af.cpuLoad!==null?'<div>CPU '+escapeHtml(af.cpuLoad)+'%</div><div class="barline"><i style="width:'+pct(af.cpuLoad)+'%"></i></div>':'')+      (af.memoryTotal?'<div style="margin-top:9px">RAM '+escapeHtml(fmtBytes(af.memoryUsed))+' / '+escapeHtml(fmtBytes(af.memoryTotal))+'</div><div class="barline"><i style="width:'+pct(Number(af.memoryTotal)?Number(af.memoryUsed||0)/Number(af.memoryTotal)*100:0)+'%"></i></div>':'')+      (af.diskTotal?'<div style="margin-top:9px">Disk '+escapeHtml(fmtBytes(af.diskUsed))+' / '+escapeHtml(fmtBytes(af.diskTotal))+'</div><div class="barline"><i style="width:'+pct(Number(af.diskTotal)?Number(af.diskUsed||0)/Number(af.diskTotal)*100:0)+'%"></i></div>':'')+    '</div>';
+    if(Array.isArray(af.interfaces)&&af.interfaces.length) html+='<div class="dgroup"><h4>Network interfaces</h4>'+af.interfaces.map(function(x){return '<div style="color:var(--text-dim);margin:3px 0">'+escapeHtml(isObj(x)?JSON.stringify(x):x)+'</div>';}).join('')+'</div>';
+    if(Array.isArray(af.processes)&&af.processes.length) html+='<div class="dgroup"><h4>Top processes</h4><table class="proc-table"><thead><tr><th>process</th><th>pid</th><th>cpu</th><th>mem</th></tr></thead><tbody>'+af.processes.slice(0,12).map(function(p){var name=isObj(p)?pick(p,["name","command","process"]):p,pid=isObj(p)?pick(p,["pid"]):"",cpu=isObj(p)?pick(p,["cpu","cpuPercent"]):"",mem=isObj(p)?pick(p,["mem","memory","memPercent"]):"";return '<tr><td>'+escapeHtml(name||'—')+'</td><td>'+escapeHtml(pid||'—')+'</td><td>'+escapeHtml(cpu||'—')+'</td><td>'+escapeHtml(mem||'—')+'</td></tr>';}).join('')+'</tbody></table>'+(af.processes.length>12?'<div style="color:var(--text-mute);font-size:10.5px;margin-top:2px">+'+(af.processes.length-12)+' more</div>':'')+'</div>';
+    if(Array.isArray(af.adminPermissions)) html+='<div class="dgroup"><h4>Admin Mode</h4><div style="color:var(--text-dim);font-size:11px;margin-bottom:8px">Explicitly enabled permissions</div><div>'+af.adminPermissions.map(function(x){return '<span class="badge">'+escapeHtml(x)+'</span>';}).join(' ')+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'+(af.adminPermissions.indexOf('SCREEN')>=0?'<button class="mini-btn" onclick="lanternAdminScreen(\''+escapeHtml(ipOf(d)||'')+'\')">SCREEN</button>':'')+(af.adminPermissions.indexOf('CLIPBOARD')>=0?'<button class="mini-btn" onclick="lanternAdminClipboard(\''+escapeHtml(ipOf(d)||'')+'\')">CLIPBOARD</button>':'')+(af.adminPermissions.indexOf('BROWSER_HISTORY')>=0?'<button class="mini-btn" onclick="lanternAdminHistory(\''+escapeHtml(ipOf(d)||'')+'\')">BROWSER HISTORY</button>':'')+(af.adminPermissions.indexOf('FILESYSTEM')>=0?'<button class="mini-btn" onclick="lanternAdminFiles(\''+escapeHtml(ipOf(d)||'')+'\')">FILES</button>':'')+'</div></div>';
+
+  }
+
+
+
+
+
+  html += '</div>';
+
+  html += '<details class="raw"><summary>Raw API response for this device</summary><pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre></details>';
+
+  return html;
+
+}
+
+
+
+
+async function lanternAdminCall(ip, path, query){
+  var url='/api/admin?ip='+encodeURIComponent(ip)+'&path='+encodeURIComponent(path)+(query?'&query='+encodeURIComponent(query):'');
+  var r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(await r.text()); return r;
+}
+async function lanternAdminScreen(ip){
+  try{var r=await lanternAdminCall(ip,'/api/v1/admin/screen');var blob=await r.blob();var u=URL.createObjectURL(blob);window.open(u,'_blank','noopener');setTimeout(function(){URL.revokeObjectURL(u);},30000);}catch(e){alert('Screen capture unavailable: '+e.message);}
+}
+async function lanternAdminClipboard(ip){
+  try{var r=await lanternAdminCall(ip,'/api/v1/admin/clipboard');var v=await r.json();alert('Remote clipboard:\n\n'+String(v).slice(0,10000));}catch(e){alert('Clipboard unavailable: '+e.message);}
+}
+async function lanternAdminHistory(ip){
+  try{var r=await lanternAdminCall(ip,'/api/v1/admin/browser-history');var v=await r.json();alert('Recent browser history:\n\n'+v.join('\n').slice(0,12000));}catch(e){alert('Browser history unavailable: '+e.message);}
+}
+async function lanternAdminFiles(ip){
+  var path=prompt('Enter an allowed directory path configured on the Agent:'); if(!path)return;
+  try{var r=await lanternAdminCall(ip,'/api/v1/admin/files','mode=list&path='+encodeURIComponent(path));var v=await r.json();alert('Directory:\n\n'+v.join('\n').slice(0,12000));}catch(e){alert('Filesystem access unavailable: '+e.message);}
+}
+
+function renderEvents(){
+
+  var wrap = qs("#evWrap");
+
+  var list = state.events.filter(function(e){
+
+    return state.evFilter === "all" || evType(e) === state.evFilter;
+
+  });
+
+  qs("#evCount").textContent = state.events.length ? (list.length + " / " + state.events.length) : "";
+
+  qs("#evEmpty").style.display = state.events.length ? "none" : "block";
+
+  if (!state.events.length) return;
+
+
+
+  var glyph = { appeared: "+", disappeared: "−", changed: "~", other: "•" };
+
+  var html = list.map(function(e, i){
+
+    var t = evType(e);
+
+    var key = evKey(e, i);
+
+    var isNew = !state.firstEventLoad && !state.seenEventKeys.has(key);
+
+    return '<div class="ev ' + t + (isNew ? ' flash' : '') + '">' +
+
+      '<div class="glyph">' + glyph[t] + '</div>' +
+
+      '<div class="body">' +
+
+        '<div class="t">' + escapeHtml(fmtTime(evTime(e))) + '</div>' +
+
+        '<div class="d">' + escapeHtml(evDevice(e) || "—") + ' <span class="m">' + t + '</span></div>' +
+
+        (evMessage(e) ? '<div class="m">' + escapeHtml(evMessage(e)) + '</div>' : '') +
+
+      '</div>' +
+
+    '</div>';
+
+  }).join("");
+
+  wrap.innerHTML = html || wrap.innerHTML;
+
+
+
+  var freshKeys = new Set();
+
+  state.events.forEach(function(e, i){ freshKeys.add(evKey(e, i)); });
+
+  state.seenEventKeys = freshKeys;
+
+  state.firstEventLoad = false;
+
+}
+
+
+
+function renderNetwork(){
+
+  var n = state.network;
+
+  qs("#netSubnet").textContent = pick(n, ["subnet","network","cidr"]) || "—";
+
+  qs("#netIface").textContent = pick(n, ["interface","iface","ifaceName"]) || "—";
+
+  qs("#netLocal").textContent = pick(n, ["localIp","hostIp","selfIp","localAddress","ip"]) || "—";
+
+  qs("#netGw").textContent = pick(n, ["gateway","router"]) || "—";
+
+  qs("#netOrigin").textContent = window.location.host || "127.0.0.1:8765";
+
+}
+
+
+
+/* ============================================================
+
+   EVENTS / WIRING
+
+   ============================================================ */
+
+var debounceTimer = null;
+
+qs("#search").addEventListener("input", function(e){
+
+  clearTimeout(debounceTimer);
+
+  var v = e.target.value;
+
+  debounceTimer = setTimeout(function(){ state.search = v; renderTable(); }, 150);
+
+});
+
+qs("#typeFilter").addEventListener("change", function(e){ state.type = e.target.value; renderTable(); });
+
+qs("#statusFilter").addEventListener("change", function(e){ state.status = e.target.value; renderTable(); });
+
+qs("#agentOnly").addEventListener("change", function(e){ state.agentOnly = e.target.checked; renderTable(); });
+
+
+
+qsa("#devTable thead th[data-key]").forEach(function(th){
+
+  th.addEventListener("click", function(){
+
+    var key = th.getAttribute("data-key");
+
+    if (key === "status") key = "status";
+
+    if (state.sortKey === key){ state.sortDir = state.sortDir === "asc" ? "desc" : "asc"; }
+
+    else { state.sortKey = key; state.sortDir = "asc"; }
+
+    qsa("#devTable thead th").forEach(function(t){ t.querySelector(".arrow") && t.removeChild(t.querySelector(".arrow")); });
+
+    var arrow = document.createElement("span");
+
+    arrow.className = "arrow"; arrow.textContent = state.sortDir === "asc" ? "↑" : "↓";
+
+    th.appendChild(arrow);
+
+    renderTable();
+
+  });
+
+});
+
+
+
+qs("#devBody").addEventListener("click", function(e){
+
+  var row = e.target.closest("tr.dev-row");
+
+  if (!row) return;
+
+  var key = row.getAttribute("data-key");
+
+  if (state.expanded.has(key)) state.expanded.delete(key);
+
+  else state.expanded.add(key);
+
+  renderTable();
+
+});
+
+
+
+qsa("#evChips .chip").forEach(function(chip){
+
+  chip.addEventListener("click", function(){
+
+    qsa("#evChips .chip").forEach(function(c){ c.classList.remove("active"); });
+
+    chip.classList.add("active");
+
+    state.evFilter = chip.getAttribute("data-t");
+
+    renderEvents();
+
+  });
+
+});
+
+
+
+qs("#refreshBtn").addEventListener("click", function(){ pollOnce(); });
+
+qs("#pauseBtn").addEventListener("click", function(){
+
+  state.paused = !state.paused;
+
+  qs("#pauseBtn").textContent = state.paused ? "Resume" : "Pause";
+
+  restartTimer();
+
+});
+
+qs("#intervalSel").addEventListener("change", function(e){
+
+  state.pollMs = parseInt(e.target.value, 10);
+
+  restartTimer();
+
+});
+
+
+
+function restartTimer(){
+
+  if (state.timer) clearInterval(state.timer);
+
+  if (!state.paused){
+
+    state.timer = setInterval(pollOnce, state.pollMs);
+
+  }
+
+}
+
+
+
+/* ---------- boot ---------- */
+
+pollOnce();
+
+restartTimer();
+
+
+
+})();
+
+</script>
+
+</body>
+
+</html>
