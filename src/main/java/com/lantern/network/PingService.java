@@ -6,23 +6,158 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 public class PingService {
-    public long measure(String ip, int timeoutMs) {
-        long start = System.nanoTime();
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+
+    private static final long PROCESS_GRACE_PERIOD_MS = 800L;
+
+    public long measure(
+            String ip,
+            int timeoutMs
+    ) {
+
+        long startTime =
+                System.nanoTime();
+
+        String operatingSystem =
+                System.getProperty(
+                        "os.name",
+                        ""
+                ).toLowerCase(Locale.ROOT);
+
         try {
-            ProcessBuilder pb;
-            if (os.contains("win")) {
-                pb = new ProcessBuilder("ping", "-n", "1", "-w", String.valueOf(timeoutMs), ip);
-            } else if (os.contains("mac")) {
-                pb = new ProcessBuilder("ping", "-c", "1", "-W", String.valueOf(timeoutMs), ip);
-            } else {
-                int seconds = Math.max(1, (int) Math.ceil(timeoutMs / 1000.0));
-                pb = new ProcessBuilder("ping", "-c", "1", "-W", String.valueOf(seconds), ip);
+
+            ProcessBuilder processBuilder =
+                    buildPingCommand(
+                            operatingSystem,
+                            ip,
+                            timeoutMs
+                    );
+
+            Process process =
+                    processBuilder
+                            .redirectErrorStream(true)
+                            .start();
+
+            drainOutput(process);
+
+            if (!waitForProcess(
+                    process,
+                    timeoutMs
+            )) {
+
+                process.destroyForcibly();
+                return -1;
             }
-            Process p = pb.redirectErrorStream(true).start();
-            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) { while (r.readLine() != null) {} }
-            if (!p.waitFor(timeoutMs + 800L, TimeUnit.MILLISECONDS)) { p.destroyForcibly(); return -1; }
-            return p.exitValue() == 0 ? Math.max(1, (System.nanoTime() - start) / 1_000_000L) : -1;
-        } catch (Exception e) { return -1; }
+
+            if (process.exitValue() != 0) {
+                return -1;
+            }
+
+            return calculateLatency(startTime);
+
+        } catch (Exception ignored) {
+            return -1;
+        }
+    }
+
+    /**
+     * Builds the platform-specific ping command.
+     */
+    private ProcessBuilder buildPingCommand(
+            String operatingSystem,
+            String ip,
+            int timeoutMs
+    ) {
+
+        if (operatingSystem.contains("win")) {
+
+            return new ProcessBuilder(
+                    "ping",
+                    "-n",
+                    "1",
+                    "-w",
+                    String.valueOf(timeoutMs),
+                    ip
+            );
+        }
+
+        if (operatingSystem.contains("mac")) {
+
+            return new ProcessBuilder(
+                    "ping",
+                    "-c",
+                    "1",
+                    "-W",
+                    String.valueOf(timeoutMs),
+                    ip
+            );
+        }
+
+        int timeoutSeconds =
+                Math.max(
+                        1,
+                        (int) Math.ceil(
+                                timeoutMs / 1000.0
+                        )
+                );
+
+        return new ProcessBuilder(
+                "ping",
+                "-c",
+                "1",
+                "-W",
+                String.valueOf(timeoutSeconds),
+                ip
+        );
+    }
+
+    /**
+     * Consumes process output so the process
+     * cannot block because of a full output buffer.
+     */
+    private void drainOutput(
+            Process process
+    ) throws Exception {
+
+        try (
+                BufferedReader reader =
+                        new BufferedReader(
+                                new InputStreamReader(
+                                        process.getInputStream()
+                                )
+                        )
+        ) {
+
+            while (reader.readLine() != null) {
+                // Output is intentionally ignored.
+            }
+        }
+    }
+
+    /**
+     * Waits for the ping process to finish.
+     */
+    private boolean waitForProcess(
+            Process process,
+            int timeoutMs
+    ) throws InterruptedException {
+
+        return process.waitFor(
+                timeoutMs + PROCESS_GRACE_PERIOD_MS,
+                TimeUnit.MILLISECONDS
+        );
+    }
+
+    /**
+     * Calculates the elapsed time in milliseconds.
+     */
+    private long calculateLatency(
+            long startTime
+    ) {
+
+        long elapsedMs =
+                (System.nanoTime() - startTime)
+                        / 1_000_000L;
+
+        return Math.max(1, elapsedMs);
     }
 }

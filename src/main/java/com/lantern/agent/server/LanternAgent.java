@@ -1,87 +1,875 @@
 package com.lantern.agent.server;
 
-import com.lantern.agent.*;
-import com.lantern.agent.admin.*;
+import com.lantern.agent.AgentConfig;
+import com.lantern.agent.SystemCollector;
+import com.lantern.agent.admin.AdminCollector;
 import com.lantern.agent.model.SystemSnapshot;
-import com.sun.net.httpserver.*;
-import java.io.*;
-import java.net.*;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.Executors;
 
 public class LanternAgent {
+
+    private static final String VERSION = "1.1.0";
+
+    private static final String JSON_CONTENT_TYPE =
+            "application/json; charset=utf-8";
+
+    private static final String API_PREFIX =
+            "/api/v1";
+
     public static void main(String[] args) throws Exception {
-        AgentConfig cfg = AgentConfig.load(args);
-        AdminCollector admin = new AdminCollector(cfg.adminPolicy());
-        System.out.println("Lantern Agent v1.1");
-        System.out.println("Listening on http://" + cfg.bind() + ":" + cfg.port());
-        System.out.println("Token stored in data/agent.token");
-        System.out.println("Admin permissions: " + (admin.permissions().isEmpty() ? "none" : String.join(", ", admin.permissions())));
-        HttpServer s = HttpServer.create(new InetSocketAddress(cfg.bind(), cfg.port()), 0);
-        SystemCollector collector = new SystemCollector();
-        s.createContext("/api/v1/health", x -> respond(x, cfg, health(admin)));
-        s.createContext("/api/v1/system", x -> respond(x, cfg, json(collector.collect(), admin)));
-        s.createContext("/api/v1/resources", x -> respond(x, cfg, json(collector.collect(), admin)));
-        s.createContext("/api/v1/network", x -> respond(x, cfg, json(collector.collect(), admin)));
-        s.createContext("/api/v1/processes", x -> respond(x, cfg, json(collector.collect(), admin)));
-        s.createContext("/api/v1/admin/permissions", x -> respond(x, cfg, permissions(admin)));
-        s.createContext("/api/v1/admin/files", x -> files(x, cfg, admin));
-        s.createContext("/api/v1/admin/screen", x -> screen(x, cfg, admin));
-        s.createContext("/api/v1/admin/clipboard", x -> clipboard(x, cfg, admin));
-        s.createContext("/api/v1/admin/browser-history", x -> browserHistory(x, cfg, admin));
-        s.setExecutor(Executors.newCachedThreadPool()); s.start();
+
+        AgentConfig config =
+                AgentConfig.load(args);
+
+        AdminCollector adminCollector =
+                new AdminCollector(
+                        config.adminPolicy()
+                );
+
+        printStartupInfo(
+                config,
+                adminCollector
+        );
+
+        HttpServer server =
+                HttpServer.create(
+                        new InetSocketAddress(
+                                config.bind(),
+                                config.port()
+                        ),
+                        0
+                );
+
+        SystemCollector systemCollector =
+                new SystemCollector();
+
+        registerRoutes(
+                server,
+                config,
+                adminCollector,
+                systemCollector
+        );
+
+        server.setExecutor(
+                Executors.newCachedThreadPool()
+        );
+
+        server.start();
     }
 
-    private static String health(AdminCollector a) {
-        return "{\"agent\":\"lantern\",\"version\":\"1.1.0\",\"status\":\"ok\",\"adminEnabled\":" + (!a.permissions().isEmpty()) + ",\"permissions\":" + arr(a.permissions()) + ",\"timestamp\":" + quote(Instant.now().toString()) + "}";
+    /**
+     * Prints basic agent startup information.
+     */
+    private static void printStartupInfo(
+            AgentConfig config,
+            AdminCollector adminCollector
+    ) {
+
+        System.out.println(
+                "Lantern Agent v" + VERSION
+        );
+
+        System.out.println(
+                "Listening on http://"
+                        + config.bind()
+                        + ":"
+                        + config.port()
+        );
+
+        System.out.println(
+                "Token stored in data/agent.token"
+        );
+
+        String permissions =
+                adminCollector.permissions().isEmpty()
+                        ? "none"
+                        : String.join(
+                                ", ",
+                                adminCollector.permissions()
+                        );
+
+        System.out.println(
+                "Admin permissions: "
+                        + permissions
+        );
     }
 
-    private static void files(HttpExchange x, AgentConfig c, AdminCollector a) throws IOException {
-        if (!authorized(x, c)) { unauthorized(x); return; }
+    /**
+     * Registers all HTTP API endpoints.
+     */
+    private static void registerRoutes(
+            HttpServer server,
+            AgentConfig config,
+            AdminCollector adminCollector,
+            SystemCollector systemCollector
+    ) {
+
+        server.createContext(
+                API_PREFIX + "/health",
+                exchange ->
+                        respond(
+                                exchange,
+                                config,
+                                health(adminCollector)
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/system",
+                exchange ->
+                        respond(
+                                exchange,
+                                config,
+                                json(
+                                        systemCollector.collect(),
+                                        adminCollector
+                                )
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/resources",
+                exchange ->
+                        respond(
+                                exchange,
+                                config,
+                                json(
+                                        systemCollector.collect(),
+                                        adminCollector
+                                )
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/network",
+                exchange ->
+                        respond(
+                                exchange,
+                                config,
+                                json(
+                                        systemCollector.collect(),
+                                        adminCollector
+                                )
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/processes",
+                exchange ->
+                        respond(
+                                exchange,
+                                config,
+                                json(
+                                        systemCollector.collect(),
+                                        adminCollector
+                                )
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/admin/permissions",
+                exchange ->
+                        respond(
+                                exchange,
+                                config,
+                                permissions(adminCollector)
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/admin/files",
+                exchange ->
+                        files(
+                                exchange,
+                                config,
+                                adminCollector
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/admin/screen",
+                exchange ->
+                        screen(
+                                exchange,
+                                config,
+                                adminCollector
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/admin/clipboard",
+                exchange ->
+                        clipboard(
+                                exchange,
+                                config,
+                                adminCollector
+                        )
+        );
+
+        server.createContext(
+                API_PREFIX + "/admin/browser-history",
+                exchange ->
+                        browserHistory(
+                                exchange,
+                                config,
+                                adminCollector
+                        )
+        );
+    }
+
+    /**
+     * Returns the agent health information.
+     */
+    private static String health(
+            AdminCollector adminCollector
+    ) {
+
+        boolean adminEnabled =
+                !adminCollector.permissions().isEmpty();
+
+        return "{"
+                + q("agent", "lantern")
+                + ","
+                + q("version", VERSION)
+                + ","
+                + q("status", "ok")
+                + ","
+                + "\"adminEnabled\":"
+                + adminEnabled
+                + ","
+                + "\"permissions\":"
+                + arr(adminCollector.permissions())
+                + ","
+                + q(
+                        "timestamp",
+                        Instant.now().toString()
+                )
+                + "}";
+    }
+
+    /**
+     * Handles file listing and file reading.
+     */
+    private static void files(
+            HttpExchange exchange,
+            AgentConfig config,
+            AdminCollector adminCollector
+    ) throws IOException {
+
+        if (!authorized(exchange, config)) {
+            unauthorized(exchange);
+            return;
+        }
+
         try {
-            String path = query(x.getRequestURI(), "path");
-            String mode = query(x.getRequestURI(), "mode");
-            String body = "read".equalsIgnoreCase(mode) ? jsonText(a.readText(path, 1_000_000)) : lines(a.listFiles(path));
-            respondAuthorized(x, body, "application/json; charset=utf-8");
-        } catch (Exception e) { error(x, 400, e.getMessage()); }
+
+            String path =
+                    query(
+                            exchange.getRequestURI(),
+                            "path"
+                    );
+
+            String mode =
+                    query(
+                            exchange.getRequestURI(),
+                            "mode"
+                    );
+
+            String body;
+
+            if ("read".equalsIgnoreCase(mode)) {
+
+                body = jsonText(
+                        adminCollector.readText(
+                                path,
+                                1_000_000
+                        )
+                );
+
+            } else {
+
+                body = lines(
+                        adminCollector.listFiles(path)
+                );
+            }
+
+            respondAuthorized(
+                    exchange,
+                    body,
+                    JSON_CONTENT_TYPE
+            );
+
+        } catch (Exception exception) {
+
+            error(
+                    exchange,
+                    400,
+                    exception.getMessage()
+            );
+        }
     }
 
-    private static void clipboard(HttpExchange x, AgentConfig c, AdminCollector a) throws IOException {
-        if (!authorized(x,c)) { unauthorized(x); return; }
-        try { respondAuthorized(x, jsonText(a.clipboardText()), "application/json; charset=utf-8"); }
-        catch (Exception e) { error(x, 400, e.getMessage()); }
-    }
+    /**
+     * Returns the current clipboard contents.
+     */
+    private static void clipboard(
+            HttpExchange exchange,
+            AgentConfig config,
+            AdminCollector adminCollector
+    ) throws IOException {
 
-    private static void browserHistory(HttpExchange x, AgentConfig c, AdminCollector a) throws IOException {
-        if (!authorized(x,c)) { unauthorized(x); return; }
-        try { respondAuthorized(x, lines(a.browserHistory(100)), "application/json; charset=utf-8"); }
-        catch (Exception e) { error(x, 400, e.getMessage()); }
-    }
+        if (!authorized(exchange, config)) {
+            unauthorized(exchange);
+            return;
+        }
 
-    private static void screen(HttpExchange x, AgentConfig c, AdminCollector a) throws IOException {
-        if (!authorized(x, c)) { unauthorized(x); return; }
         try {
-            byte[] png = a.screenPng();
-            x.getResponseHeaders().set("Content-Type", "image/png"); x.getResponseHeaders().set("Cache-Control", "no-store");
-            x.sendResponseHeaders(200, png.length); try (OutputStream o = x.getResponseBody()) { o.write(png); }
-        } catch (Exception e) { error(x, 400, e.getMessage()); }
+
+            respondAuthorized(
+                    exchange,
+                    jsonText(
+                            adminCollector.clipboardText()
+                    ),
+                    JSON_CONTENT_TYPE
+            );
+
+        } catch (Exception exception) {
+
+            error(
+                    exchange,
+                    400,
+                    exception.getMessage()
+            );
+        }
     }
 
-    private static boolean authorized(HttpExchange x, AgentConfig c) { return c.token().equals(x.getRequestHeaders().getFirst("Authorization")); }
-    private static void unauthorized(HttpExchange x) throws IOException { x.getResponseHeaders().set("WWW-Authenticate", "Bearer"); x.sendResponseHeaders(401, -1); x.close(); }
-    private static void respond(HttpExchange x, AgentConfig c, String body) throws IOException { if (!authorized(x,c)) { unauthorized(x); return; } respondAuthorized(x,body,"application/json; charset=utf-8"); }
-    private static void respondAuthorized(HttpExchange x, String body, String type) throws IOException { if (!x.getRequestMethod().equals("GET")) { x.sendResponseHeaders(405,-1); return; } byte[] b=body.getBytes(StandardCharsets.UTF_8); x.getResponseHeaders().set("Content-Type",type); x.getResponseHeaders().set("Cache-Control","no-store"); x.sendResponseHeaders(200,b.length); try(OutputStream o=x.getResponseBody()){o.write(b);} }
-    private static void error(HttpExchange x,int code,String msg)throws IOException{String b=jsonText(msg==null?"error":msg);byte[]d=b.getBytes(StandardCharsets.UTF_8);x.getResponseHeaders().set("Content-Type","application/json; charset=utf-8");x.sendResponseHeaders(code,d.length);try(OutputStream o=x.getResponseBody()){o.write(d);}}
+    /**
+     * Returns browser history entries.
+     */
+    private static void browserHistory(
+            HttpExchange exchange,
+            AgentConfig config,
+            AdminCollector adminCollector
+    ) throws IOException {
 
-    private static String json(SystemSnapshot s, AdminCollector a) { return "{"+q("timestamp",s.timestamp().toString())+","+q("hostname",s.hostname())+","+q("os",s.os())+","+q("kernel",s.kernel())+","+q("architecture",s.architecture())+","+q("hardwareModel",s.hardwareModel())+","+q("cpuModel",s.cpuModel())+","+q("gpu",s.gpu())+","+q("loggedInUser",s.loggedInUser())+","+q("javaVersion",s.javaVersion())+",\"cpuCores\":"+s.cpuCores()+",\"cpuLoadPercent\":"+s.cpuLoadPercent()+",\"memoryTotalBytes\":"+s.memoryTotalBytes()+",\"memoryUsedBytes\":"+s.memoryUsedBytes()+",\"memoryAvailableBytes\":"+s.memoryAvailableBytes()+",\"diskTotalBytes\":"+s.diskTotalBytes()+",\"diskUsedBytes\":"+s.diskUsedBytes()+",\"diskFreeBytes\":"+s.diskFreeBytes()+",\"uptimeSeconds\":"+s.uptimeSeconds()+",\"batteryPresent\":"+s.batteryPresent()+",\"batteryPercent\":"+s.batteryPercent()+",\"networkInterfaces\":"+arr(s.networkInterfaces())+",\"processes\":"+arr(s.processes())+",\"adminEnabled\":"+(!a.permissions().isEmpty())+",\"adminPermissions\":"+arr(a.permissions())+"}"; }
-    private static String permissions(AdminCollector a){return "{\"enabled\":"+(!a.permissions().isEmpty())+",\"permissions\":"+arr(a.permissions())+",\"roots\":"+arr(a.policy().allowedRoots().stream().map(Object::toString).toList())+"}";}
-    private static String lines(List<String> values){return arr(values);}
-    private static String jsonText(String v){return quote(v);}
-    private static String q(String k,String v){return "\""+k+"\":"+quote(v);}
-    private static String quote(String value){if(value==null)return "null";StringBuilder b=new StringBuilder("\"");for(char c:value.toCharArray()){switch(c){case '\\'->b.append("\\\\");case '"'->b.append("\\\"");case '\n'->b.append("\\n");case '\r'->b.append("\\r");case '\t'->b.append("\\t");case '\b'->b.append("\\b");case '\f'->b.append("\\f");default->{if(c<0x20)b.append(String.format("\\u%04x",(int)c));else b.append(c);}}}return b.append('"').toString();}
-    private static String arr(List<String>a){StringBuilder b=new StringBuilder("[");for(int i=0;i<a.size();i++){if(i>0)b.append(',');b.append(quote(a.get(i)));}return b.append(']').toString();}
-    private static String query(URI uri,String key){String q=uri.getRawQuery();if(q==null)return null;for(String p:q.split("&")){String[]x=p.split("=",2);if(x.length==2&&x[0].equals(key))try{return URLDecoder.decode(x[1],StandardCharsets.UTF_8);}catch(Exception ignored){}}return null;}
+        if (!authorized(exchange, config)) {
+            unauthorized(exchange);
+            return;
+        }
+
+        try {
+
+            respondAuthorized(
+                    exchange,
+                    lines(
+                            adminCollector.browserHistory(100)
+                    ),
+                    JSON_CONTENT_TYPE
+            );
+
+        } catch (Exception exception) {
+
+            error(
+                    exchange,
+                    400,
+                    exception.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Returns a PNG screenshot from the agent machine.
+     */
+    private static void screen(
+            HttpExchange exchange,
+            AgentConfig config,
+            AdminCollector adminCollector
+    ) throws IOException {
+
+        if (!authorized(exchange, config)) {
+            unauthorized(exchange);
+            return;
+        }
+
+        try {
+
+            byte[] png =
+                    adminCollector.screenPng();
+
+            exchange.getResponseHeaders().set(
+                    "Content-Type",
+                    "image/png"
+            );
+
+            exchange.getResponseHeaders().set(
+                    "Cache-Control",
+                    "no-store"
+            );
+
+            exchange.sendResponseHeaders(
+                    200,
+                    png.length
+            );
+
+            try (OutputStream output =
+                         exchange.getResponseBody()) {
+
+                output.write(png);
+            }
+
+        } catch (Exception exception) {
+
+            error(
+                    exchange,
+                    400,
+                    exception.getMessage()
+            );
+        }
+    }
+
+    /**
+     * Checks whether the request contains the configured token.
+     */
+    private static boolean authorized(
+            HttpExchange exchange,
+            AgentConfig config
+    ) {
+
+        String authorization =
+                exchange.getRequestHeaders()
+                        .getFirst("Authorization");
+
+        return config.token().equals(
+                authorization
+        );
+    }
+
+    /**
+     * Sends an unauthorized response.
+     */
+    private static void unauthorized(
+            HttpExchange exchange
+    ) throws IOException {
+
+        exchange.getResponseHeaders().set(
+                "WWW-Authenticate",
+                "Bearer"
+        );
+
+        exchange.sendResponseHeaders(
+                401,
+                -1
+        );
+
+        exchange.close();
+    }
+
+    /**
+     * Sends an authenticated JSON response.
+     */
+    private static void respond(
+            HttpExchange exchange,
+            AgentConfig config,
+            String body
+    ) throws IOException {
+
+        if (!authorized(exchange, config)) {
+            unauthorized(exchange);
+            return;
+        }
+
+        respondAuthorized(
+                exchange,
+                body,
+                JSON_CONTENT_TYPE
+        );
+    }
+
+    /**
+     * Sends a normal HTTP response.
+     */
+    private static void respondAuthorized(
+            HttpExchange exchange,
+            String body,
+            String contentType
+    ) throws IOException {
+
+        if (!"GET".equals(
+                exchange.getRequestMethod()
+        )) {
+
+            exchange.sendResponseHeaders(
+                    405,
+                    -1
+            );
+
+            exchange.close();
+            return;
+        }
+
+        byte[] data =
+                body.getBytes(
+                        StandardCharsets.UTF_8
+                );
+
+        exchange.getResponseHeaders().set(
+                "Content-Type",
+                contentType
+        );
+
+        exchange.getResponseHeaders().set(
+                "Cache-Control",
+                "no-store"
+        );
+
+        exchange.sendResponseHeaders(
+                200,
+                data.length
+        );
+
+        try (OutputStream output =
+                     exchange.getResponseBody()) {
+
+            output.write(data);
+        }
+    }
+
+    /**
+     * Sends a JSON error response.
+     */
+    private static void error(
+            HttpExchange exchange,
+            int statusCode,
+            String message
+    ) throws IOException {
+
+        String body =
+                jsonText(
+                        message == null
+                                ? "error"
+                                : message
+                );
+
+        byte[] data =
+                body.getBytes(
+                        StandardCharsets.UTF_8
+                );
+
+        exchange.getResponseHeaders().set(
+                "Content-Type",
+                JSON_CONTENT_TYPE
+        );
+
+        exchange.sendResponseHeaders(
+                statusCode,
+                data.length
+        );
+
+        try (OutputStream output =
+                     exchange.getResponseBody()) {
+
+            output.write(data);
+        }
+    }
+
+    /**
+     * Converts a system snapshot into JSON.
+     */
+    private static String json(
+            SystemSnapshot snapshot,
+            AdminCollector adminCollector
+    ) {
+
+        return "{"
+                + q(
+                        "timestamp",
+                        snapshot.timestamp().toString()
+                )
+                + ","
+                + q(
+                        "hostname",
+                        snapshot.hostname()
+                )
+                + ","
+                + q(
+                        "os",
+                        snapshot.os()
+                )
+                + ","
+                + q(
+                        "kernel",
+                        snapshot.kernel()
+                )
+                + ","
+                + q(
+                        "architecture",
+                        snapshot.architecture()
+                )
+                + ","
+                + q(
+                        "hardwareModel",
+                        snapshot.hardwareModel()
+                )
+                + ","
+                + q(
+                        "cpuModel",
+                        snapshot.cpuModel()
+                )
+                + ","
+                + q(
+                        "gpu",
+                        snapshot.gpu()
+                )
+                + ","
+                + q(
+                        "loggedInUser",
+                        snapshot.loggedInUser()
+                )
+                + ","
+                + q(
+                        "javaVersion",
+                        snapshot.javaVersion()
+                )
+                + ","
+                + "\"cpuCores\":"
+                + snapshot.cpuCores()
+                + ","
+                + "\"cpuLoadPercent\":"
+                + snapshot.cpuLoadPercent()
+                + ","
+                + "\"memoryTotalBytes\":"
+                + snapshot.memoryTotalBytes()
+                + ","
+                + "\"memoryUsedBytes\":"
+                + snapshot.memoryUsedBytes()
+                + ","
+                + "\"memoryAvailableBytes\":"
+                + snapshot.memoryAvailableBytes()
+                + ","
+                + "\"diskTotalBytes\":"
+                + snapshot.diskTotalBytes()
+                + ","
+                + "\"diskUsedBytes\":"
+                + snapshot.diskUsedBytes()
+                + ","
+                + "\"diskFreeBytes\":"
+                + snapshot.diskFreeBytes()
+                + ","
+                + "\"uptimeSeconds\":"
+                + snapshot.uptimeSeconds()
+                + ","
+                + "\"batteryPresent\":"
+                + snapshot.batteryPresent()
+                + ","
+                + "\"batteryPercent\":"
+                + snapshot.batteryPercent()
+                + ","
+                + "\"networkInterfaces\":"
+                + arr(snapshot.networkInterfaces())
+                + ","
+                + "\"processes\":"
+                + arr(snapshot.processes())
+                + ","
+                + "\"adminEnabled\":"
+                + !adminCollector.permissions().isEmpty()
+                + ","
+                + "\"adminPermissions\":"
+                + arr(adminCollector.permissions())
+                + "}";
+    }
+
+    /**
+     * Returns the configured admin permissions and allowed roots.
+     */
+    private static String permissions(
+            AdminCollector adminCollector
+    ) {
+
+        List<String> roots =
+                adminCollector.policy()
+                        .allowedRoots()
+                        .stream()
+                        .map(Object::toString)
+                        .toList();
+
+        return "{"
+                + "\"enabled\":"
+                + !adminCollector.permissions().isEmpty()
+                + ","
+                + "\"permissions\":"
+                + arr(adminCollector.permissions())
+                + ","
+                + "\"roots\":"
+                + arr(roots)
+                + "}";
+    }
+
+    private static String lines(
+            List<String> values
+    ) {
+
+        return arr(values);
+    }
+
+    private static String jsonText(
+            String value
+    ) {
+
+        return quote(value);
+    }
+
+    private static String q(
+            String key,
+            String value
+    ) {
+
+        return "\""
+                + key
+                + "\":"
+                + quote(value);
+    }
+
+    /**
+     * Escapes a Java string for JSON.
+     */
+    private static String quote(
+            String value
+    ) {
+
+        if (value == null) {
+            return "null";
+        }
+
+        StringBuilder result =
+                new StringBuilder("\"");
+
+        for (char character :
+                value.toCharArray()) {
+
+            switch (character) {
+
+                case '\\' ->
+                        result.append("\\\\");
+
+                case '"' ->
+                        result.append("\\\"");
+
+                case '\n' ->
+                        result.append("\\n");
+
+                case '\r' ->
+                        result.append("\\r");
+
+                case '\t' ->
+                        result.append("\\t");
+
+                case '\b' ->
+                        result.append("\\b");
+
+                case '\f' ->
+                        result.append("\\f");
+
+                default -> {
+
+                    if (character < 0x20) {
+
+                        result.append(
+                                String.format(
+                                        "\\u%04x",
+                                        (int) character
+                                )
+                        );
+
+                    } else {
+
+                        result.append(character);
+                    }
+                }
+            }
+        }
+
+        return result
+                .append('"')
+                .toString();
+    }
+
+    /**
+     * Converts a list of strings into a JSON array.
+     */
+    private static String arr(
+            List<String> values
+    ) {
+
+        StringBuilder result =
+                new StringBuilder("[");
+
+        for (int i = 0;
+             i < values.size();
+             i++) {
+
+            if (i > 0) {
+                result.append(',');
+            }
+
+            result.append(
+                    quote(values.get(i))
+            );
+        }
+
+        return result
+                .append(']')
+                .toString();
+    }
+
+    /**
+     * Reads a query parameter from the request URI.
+     */
+    private static String query(
+            URI uri,
+            String key
+    ) {
+
+        String rawQuery =
+                uri.getRawQuery();
+
+        if (rawQuery == null) {
+            return null;
+        }
+
+        for (String parameter :
+                rawQuery.split("&")) {
+
+            String[] parts =
+                    parameter.split("=", 2);
+
+            if (parts.length != 2
+                    || !parts[0].equals(key)) {
+
+                continue;
+            }
+
+            try {
+
+                return URLDecoder.decode(
+                        parts[1],
+                        StandardCharsets.UTF_8
+                );
+
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        return null;
+    }
 }

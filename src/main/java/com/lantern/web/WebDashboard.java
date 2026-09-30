@@ -8,208 +8,632 @@ import com.lantern.model.Service;
 import com.lantern.network.NetworkInterfaceInfo;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Executors;
 
-/** Local-only dashboard. Host telemetry is only exposed from explicitly paired agents. */
 public class WebDashboard {
+
+    private static final String JSON_CONTENT_TYPE =
+            "application/json; charset=utf-8";
+
+    private static final String HTML_CONTENT_TYPE =
+            "text/html; charset=utf-8";
+
     private final HttpServer server;
-    private volatile List<Device> devices = List.of();
-    private volatile NetworkInterfaceInfo network;
-    private volatile List<NetworkEvent> events = List.of();
     private final AgentRegistry agents;
 
-    public WebDashboard(int port, AgentRegistry agents) throws IOException {
+    private volatile List<Device> devices =
+            List.of();
+
+    private volatile NetworkInterfaceInfo network;
+
+    private volatile List<NetworkEvent> events =
+            List.of();
+
+    public WebDashboard(
+            int port,
+            AgentRegistry agents
+    ) throws IOException {
+
         this.agents = agents;
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        server.createContext("/", this::home);
-        server.createContext("/api/devices", this::apiDevices);
-        server.createContext("/api/network", this::apiNetwork);
-        server.createContext("/api/events", this::apiEvents);
-        server.createContext("/api/admin", this::apiAdmin);
-        server.setExecutor(Executors.newCachedThreadPool());
+
+        server = HttpServer.create(
+                new InetSocketAddress(
+                        "127.0.0.1",
+                        port
+                ),
+                0
+        );
+
+        registerRoutes();
+
+        server.setExecutor(
+                Executors.newCachedThreadPool()
+        );
+    }
+
+    private void registerRoutes() {
+
+        server.createContext(
+                "/",
+                this::home
+        );
+
+        server.createContext(
+                "/api/devices",
+                this::apiDevices
+        );
+
+        server.createContext(
+                "/api/network",
+                this::apiNetwork
+        );
+
+        server.createContext(
+                "/api/events",
+                this::apiEvents
+        );
+
+        server.createContext(
+                "/api/admin",
+                this::apiAdmin
+        );
     }
 
     public void start() {
+
         server.start();
-        System.out.println("Dashboard: http://127.0.0.1:" + server.getAddress().getPort());
+
+        System.out.println(
+                "Dashboard: http://127.0.0.1:"
+                        + server.getAddress().getPort()
+        );
     }
 
-    public void update(NetworkInterfaceInfo network, List<Device> devices, List<NetworkEvent> events) {
+    public void update(
+            NetworkInterfaceInfo network,
+            List<Device> devices,
+            List<NetworkEvent> events
+    ) {
+
         this.network = network;
         this.devices = List.copyOf(devices);
         this.events = List.copyOf(events);
     }
 
-    private void home(HttpExchange exchange) throws IOException {
-        Path page = Path.of("web", "index.html");
+    private void home(
+            HttpExchange exchange
+    ) throws IOException {
+
+        Path page =
+                Path.of(
+                        "web",
+                        "index.html"
+                );
+
         if (!Files.exists(page)) {
-            send(exchange,
-                    "<!doctype html><html><body style='font-family:monospace;background:#0a0d0a;color:#b6ff3c;padding:30px'>"
-                            + "<h1>Lantern v1.1</h1><p>Dashboard file not found: web/index.html</p>"
-                            + "<p>Start Lantern from the extracted project root.</p></body></html>",
-                    "text/html; charset=utf-8");
+
+            String fallback =
+                    "<!doctype html>"
+                            + "<html>"
+                            + "<body style='font-family:monospace;"
+                            + "background:#0a0d0a;"
+                            + "color:#b6ff3c;"
+                            + "padding:30px'>"
+                            + "<h1>Lantern v1.1</h1>"
+                            + "<p>Dashboard file not found: "
+                            + "web/index.html</p>"
+                            + "<p>Start Lantern from the "
+                            + "extracted project root.</p>"
+                            + "</body>"
+                            + "</html>";
+
+            send(
+                    exchange,
+                    fallback,
+                    HTML_CONTENT_TYPE
+            );
+
             return;
         }
-        send(exchange, Files.readString(page, StandardCharsets.UTF_8), "text/html; charset=utf-8");
+
+        send(
+                exchange,
+                Files.readString(
+                        page,
+                        StandardCharsets.UTF_8
+                ),
+                HTML_CONTENT_TYPE
+        );
     }
 
-    private void apiDevices(HttpExchange exchange) throws IOException {
-        StringBuilder json = new StringBuilder("[");
+    private void apiDevices(
+            HttpExchange exchange
+    ) throws IOException {
+
+        StringBuilder json =
+                new StringBuilder("[");
+
         for (int i = 0; i < devices.size(); i++) {
-            if (i > 0) json.append(',');
-            Device d = devices.get(i);
-            json.append('{')
-                    .append("\"ip\":").append(q(d.getIpAddress()))
-                    .append(",\"name\":").append(q(d.displayName()))
-                    .append(",\"hostname\":").append(q(d.getHostname()))
-                    .append(",\"mac\":").append(q(d.getMacAddress()))
-                    .append(",\"vendor\":").append(q(d.getVendor()))
-                    .append(",\"type\":").append(q(d.getType()))
-                    .append(",\"latency\":").append(d.getLatencyMs())
-                    .append(",\"online\":").append(d.isOnline())
-                    .append(",\"discoveredAt\":").append(q(d.getDiscoveredAt().toString()))
-                    .append(",\"services\":[");
 
-            List<Service> services = d.getServices();
-            for (int k = 0; k < services.size(); k++) {
-                if (k > 0) json.append(',');
-                Service service = services.get(k);
-                json.append('{')
-                        .append("\"port\":").append(service.port())
-                        .append(",\"name\":").append(q(service.name()))
-                        .append(",\"banner\":").append(q(service.banner()))
-                        .append('}');
+            if (i > 0) {
+                json.append(',');
             }
-            json.append(']');
 
-            AgentClient.AgentData agent = d.getAgentData();
-            if (agent != null) {
-                json.append(",\"agent\":{")
-                        .append("\"hostname\":").append(q(agent.hostname()))
-                        .append(",\"os\":").append(q(agent.os()))
-                        .append(",\"kernel\":").append(q(agent.kernel()))
-                        .append(",\"architecture\":").append(q(agent.architecture()))
-                        .append(",\"hardwareModel\":").append(q(agent.hardwareModel()))
-                        .append(",\"cpuModel\":").append(q(agent.cpuModel()))
-                        .append(",\"gpu\":").append(q(agent.gpu()))
-                        .append(",\"loggedInUser\":").append(q(agent.loggedInUser()))
-                        .append(",\"javaVersion\":").append(q(agent.javaVersion()))
-                        .append(",\"cpuCores\":").append(agent.cpuCores())
-                        .append(",\"cpuLoadPercent\":").append(agent.cpuLoadPercent())
-                        .append(",\"memoryTotalBytes\":").append(agent.memoryTotalBytes())
-                        .append(",\"memoryUsedBytes\":").append(agent.memoryUsedBytes())
-                        .append(",\"memoryAvailableBytes\":").append(agent.memoryAvailableBytes())
-                        .append(",\"diskTotalBytes\":").append(agent.diskTotalBytes())
-                        .append(",\"diskUsedBytes\":").append(agent.diskUsedBytes())
-                        .append(",\"diskFreeBytes\":").append(agent.diskFreeBytes())
-                        .append(",\"uptimeSeconds\":").append(agent.uptimeSeconds())
-                        .append(",\"batteryPercent\":").append(agent.batteryPercent())
-                        .append(",\"receivedAt\":").append(q(agent.receivedAt().toString()))
-                        .append(",\"networkInterfaces\":").append(arr(agent.networkInterfaces()))
-                        .append(",\"processes\":").append(arr(agent.processes()))
-                        .append(",\"adminPermissions\":").append(arr(agent.adminPermissions()))
-                        .append('}');
-            }
-            json.append('}');
+            appendDevice(
+                    json,
+                    devices.get(i)
+            );
         }
+
         json.append(']');
-        send(exchange, json.toString(), "application/json; charset=utf-8");
+
+        send(
+                exchange,
+                json.toString(),
+                JSON_CONTENT_TYPE
+        );
     }
 
-    private void apiAdmin(HttpExchange exchange) throws IOException {
+    private void appendDevice(
+            StringBuilder json,
+            Device device
+    ) {
+
+        json.append('{')
+                .append("\"ip\":")
+                .append(q(device.getIpAddress()))
+                .append(",\"name\":")
+                .append(q(device.displayName()))
+                .append(",\"hostname\":")
+                .append(q(device.getHostname()))
+                .append(",\"mac\":")
+                .append(q(device.getMacAddress()))
+                .append(",\"vendor\":")
+                .append(q(device.getVendor()))
+                .append(",\"type\":")
+                .append(q(device.getType()))
+                .append(",\"latency\":")
+                .append(device.getLatencyMs())
+                .append(",\"online\":")
+                .append(device.isOnline())
+                .append(",\"discoveredAt\":")
+                .append(q(
+                        device.getDiscoveredAt()
+                                .toString()
+                ))
+                .append(",\"services\":");
+
+        appendServices(
+                json,
+                device.getServices()
+        );
+
+        AgentClient.AgentData agent =
+                device.getAgentData();
+
+        if (agent != null) {
+            appendAgentData(
+                    json,
+                    agent
+            );
+        }
+
+        json.append('}');
+    }
+
+    private void appendServices(
+            StringBuilder json,
+            List<Service> services
+    ) {
+
+        json.append('[');
+
+        for (int i = 0; i < services.size(); i++) {
+
+            if (i > 0) {
+                json.append(',');
+            }
+
+            Service service =
+                    services.get(i);
+
+            json.append('{')
+                    .append("\"port\":")
+                    .append(service.port())
+                    .append(",\"name\":")
+                    .append(q(service.name()))
+                    .append(",\"banner\":")
+                    .append(q(service.banner()))
+                    .append('}');
+        }
+
+        json.append(']');
+    }
+
+    private void appendAgentData(
+            StringBuilder json,
+            AgentClient.AgentData agent
+    ) {
+
+        json.append(",\"agent\":{")
+                .append("\"hostname\":")
+                .append(q(agent.hostname()))
+                .append(",\"os\":")
+                .append(q(agent.os()))
+                .append(",\"kernel\":")
+                .append(q(agent.kernel()))
+                .append(",\"architecture\":")
+                .append(q(agent.architecture()))
+                .append(",\"hardwareModel\":")
+                .append(q(agent.hardwareModel()))
+                .append(",\"cpuModel\":")
+                .append(q(agent.cpuModel()))
+                .append(",\"gpu\":")
+                .append(q(agent.gpu()))
+                .append(",\"loggedInUser\":")
+                .append(q(agent.loggedInUser()))
+                .append(",\"javaVersion\":")
+                .append(q(agent.javaVersion()))
+                .append(",\"cpuCores\":")
+                .append(agent.cpuCores())
+                .append(",\"cpuLoadPercent\":")
+                .append(agent.cpuLoadPercent())
+                .append(",\"memoryTotalBytes\":")
+                .append(agent.memoryTotalBytes())
+                .append(",\"memoryUsedBytes\":")
+                .append(agent.memoryUsedBytes())
+                .append(",\"memoryAvailableBytes\":")
+                .append(agent.memoryAvailableBytes())
+                .append(",\"diskTotalBytes\":")
+                .append(agent.diskTotalBytes())
+                .append(",\"diskUsedBytes\":")
+                .append(agent.diskUsedBytes())
+                .append(",\"diskFreeBytes\":")
+                .append(agent.diskFreeBytes())
+                .append(",\"uptimeSeconds\":")
+                .append(agent.uptimeSeconds())
+                .append(",\"batteryPercent\":")
+                .append(agent.batteryPercent())
+                .append(",\"receivedAt\":")
+                .append(q(
+                        agent.receivedAt()
+                                .toString()
+                ))
+                .append(",\"networkInterfaces\":")
+                .append(arr(agent.networkInterfaces()))
+                .append(",\"processes\":")
+                .append(arr(agent.processes()))
+                .append(",\"adminPermissions\":")
+                .append(arr(agent.adminPermissions()))
+                .append('}');
+    }
+
+    private void apiAdmin(
+            HttpExchange exchange
+    ) throws IOException {
+
         try {
-            String ip = query(exchange.getRequestURI(), "ip");
-            String path = query(exchange.getRequestURI(), "path");
-            String q = query(exchange.getRequestURI(), "query");
-            if (ip == null || path == null) { send(exchange, "{\"error\":\"ip and path are required\"}", "application/json; charset=utf-8", 400); return; }
-            AgentRegistry.ProxyResponse r = agents.proxy(ip, path, q);
-            send(exchange, new String(r.body(), StandardCharsets.UTF_8), r.contentType(), r.status());
-        } catch (Exception e) { send(exchange, q(e.getMessage()), "application/json; charset=utf-8", 400); }
+
+            URI uri =
+                    exchange.getRequestURI();
+
+            String ip =
+                    query(uri, "ip");
+
+            String path =
+                    query(uri, "path");
+
+            String query =
+                    query(uri, "query");
+
+            if (ip == null || path == null) {
+
+                send(
+                        exchange,
+                        "{\"error\":\"ip and path are required\"}",
+                        JSON_CONTENT_TYPE,
+                        400
+                );
+
+                return;
+            }
+
+            AgentRegistry.ProxyResponse response =
+                    agents.proxy(
+                            ip,
+                            path,
+                            query
+                    );
+
+            send(
+                    exchange,
+                    new String(
+                            response.body(),
+                            StandardCharsets.UTF_8
+                    ),
+                    response.contentType(),
+                    response.status()
+            );
+
+        } catch (Exception exception) {
+
+            send(
+                    exchange,
+                    q(exception.getMessage()),
+                    JSON_CONTENT_TYPE,
+                    400
+            );
+        }
     }
 
-    private static String query(java.net.URI uri, String key) {
-        String raw = uri.getRawQuery(); if (raw == null) return null;
-        for (String pair : raw.split("&")) { String[] p = pair.split("=", 2); if (p.length == 2 && p[0].equals(key)) try { return java.net.URLDecoder.decode(p[1], StandardCharsets.UTF_8); } catch (Exception ignored) {} }
+    private static String query(
+            URI uri,
+            String key
+    ) {
+
+        String rawQuery =
+                uri.getRawQuery();
+
+        if (rawQuery == null) {
+            return null;
+        }
+
+        for (String pair :
+                rawQuery.split("&")) {
+
+            String[] parts =
+                    pair.split("=", 2);
+
+            if (parts.length != 2
+                    || !parts[0].equals(key)) {
+                continue;
+            }
+
+            try {
+
+                return URLDecoder.decode(
+                        parts[1],
+                        StandardCharsets.UTF_8
+                );
+
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
         return null;
     }
 
-    private void apiNetwork(HttpExchange exchange) throws IOException {
-        String json = network == null
-                ? "{}"
-                : "{"
-                + "\"interface\":" + q(network.getInterfaceName())
-                + ",\"ip\":" + q(network.getLocalAddress())
-                + ",\"network\":" + q(network.getNetworkAddress() + "/" + network.getPrefixLength())
-                + ",\"gateway\":" + q(network.getDefaultGateway())
-                + ",\"dns\":" + arr(network.getDnsServers())
-                + "}";
-        send(exchange, json, "application/json; charset=utf-8");
+    private void apiNetwork(
+            HttpExchange exchange
+    ) throws IOException {
+
+        String json;
+
+        if (network == null) {
+            json = "{}";
+        } else {
+
+            json =
+                    "{"
+                            + "\"interface\":"
+                            + q(network.getInterfaceName())
+                            + ",\"ip\":"
+                            + q(network.getLocalAddress())
+                            + ",\"network\":"
+                            + q(
+                                    network.getNetworkAddress()
+                                            + "/"
+                                            + network.getPrefixLength()
+                            )
+                            + ",\"gateway\":"
+                            + q(network.getDefaultGateway())
+                            + ",\"dns\":"
+                            + arr(network.getDnsServers())
+                            + "}";
+        }
+
+        send(
+                exchange,
+                json,
+                JSON_CONTENT_TYPE
+        );
     }
 
-    private void apiEvents(HttpExchange exchange) throws IOException {
-        StringBuilder json = new StringBuilder("[");
+    private void apiEvents(
+            HttpExchange exchange
+    ) throws IOException {
+
+        StringBuilder json =
+                new StringBuilder("[");
+
         for (int i = 0; i < events.size(); i++) {
-            if (i > 0) json.append(',');
-            NetworkEvent event = events.get(i);
-            Device device = event.device();
-            json.append('{')
-                    .append("\"type\":").append(q(event.type()))
-                    .append(",\"ip\":").append(q(device.getIpAddress()))
-                    .append(",\"name\":").append(q(device.displayName()))
-                    .append(",\"hostname\":").append(q(device.getHostname()))
-                    .append(",\"timestamp\":").append(q(device.getDiscoveredAt().toString()))
-                    .append('}');
+
+            if (i > 0) {
+                json.append(',');
+            }
+
+            appendEvent(
+                    json,
+                    events.get(i)
+            );
         }
+
         json.append(']');
-        send(exchange, json.toString(), "application/json; charset=utf-8");
+
+        send(
+                exchange,
+                json.toString(),
+                JSON_CONTENT_TYPE
+        );
     }
 
-    private static String arr(List<String> values) {
-        StringBuilder json = new StringBuilder("[");
+    private void appendEvent(
+            StringBuilder json,
+            NetworkEvent event
+    ) {
+
+        Device device =
+                event.device();
+
+        json.append('{')
+                .append("\"type\":")
+                .append(q(event.type()))
+                .append(",\"ip\":")
+                .append(q(device.getIpAddress()))
+                .append(",\"name\":")
+                .append(q(device.displayName()))
+                .append(",\"hostname\":")
+                .append(q(device.getHostname()))
+                .append(",\"timestamp\":")
+                .append(q(
+                        device.getDiscoveredAt()
+                                .toString()
+                ))
+                .append('}');
+    }
+
+    private static String arr(
+            List<String> values
+    ) {
+
+        StringBuilder json =
+                new StringBuilder("[");
+
         for (int i = 0; i < values.size(); i++) {
-            if (i > 0) json.append(',');
-            json.append(q(values.get(i)));
+
+            if (i > 0) {
+                json.append(',');
+            }
+
+            json.append(
+                    q(values.get(i))
+            );
         }
-        return json.append(']').toString();
+
+        return json
+                .append(']')
+                .toString();
     }
 
-    private static String q(String value) {
-        if (value == null) return "null";
-        StringBuilder out = new StringBuilder("\"");
-        for (char c : value.toCharArray()) {
-            switch (c) {
-                case '\\' -> out.append("\\\\");
-                case '"' -> out.append("\\\"");
-                case '\b' -> out.append("\\b");
-                case '\f' -> out.append("\\f");
-                case '\n' -> out.append("\\n");
-                case '\r' -> out.append("\\r");
-                case '\t' -> out.append("\\t");
+    private static String q(
+            String value
+    ) {
+
+        if (value == null) {
+            return "null";
+        }
+
+        StringBuilder output =
+                new StringBuilder("\"");
+
+        for (char character :
+                value.toCharArray()) {
+
+            switch (character) {
+
+                case '\\' ->
+                        output.append("\\\\");
+
+                case '"' ->
+                        output.append("\\\"");
+
+                case '\b' ->
+                        output.append("\\b");
+
+                case '\f' ->
+                        output.append("\\f");
+
+                case '\n' ->
+                        output.append("\\n");
+
+                case '\r' ->
+                        output.append("\\r");
+
+                case '\t' ->
+                        output.append("\\t");
+
                 default -> {
-                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
-                    else out.append(c);
+
+                    if (character < 0x20) {
+
+                        output.append(
+                                String.format(
+                                        "\\u%04x",
+                                        (int) character
+                                )
+                        );
+
+                    } else {
+
+                        output.append(character);
+                    }
                 }
             }
         }
-        return out.append('"').toString();
+
+        return output
+                .append('"')
+                .toString();
     }
 
-    private static void send(HttpExchange exchange, String body, String type) throws IOException { send(exchange, body, type, 200); }
+    private static void send(
+            HttpExchange exchange,
+            String body,
+            String type
+    ) throws IOException {
 
-    private static void send(HttpExchange exchange, String body, String type, int status) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", type);
-        exchange.getResponseHeaders().set("Cache-Control", "no-store");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream output = exchange.getResponseBody()) {
+        send(
+                exchange,
+                body,
+                type,
+                200
+        );
+    }
+
+    private static void send(
+            HttpExchange exchange,
+            String body,
+            String type,
+            int status
+    ) throws IOException {
+
+        byte[] bytes =
+                body.getBytes(
+                        StandardCharsets.UTF_8
+                );
+
+        exchange.getResponseHeaders()
+                .set(
+                        "Content-Type",
+                        type
+                );
+
+        exchange.getResponseHeaders()
+                .set(
+                        "Cache-Control",
+                        "no-store"
+                );
+
+        exchange.sendResponseHeaders(
+                status,
+                bytes.length
+        );
+
+        try (
+                OutputStream output =
+                        exchange.getResponseBody()
+        ) {
+
             output.write(bytes);
         }
     }

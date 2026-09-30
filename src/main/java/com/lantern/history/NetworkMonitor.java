@@ -1,3 +1,135 @@
 package com.lantern.history;
-import com.lantern.model.Device;import java.util.*;
-public class NetworkMonitor {public List<NetworkEvent> compare(List<Device>a,List<Device>b){Map<String,Device>x=map(a),y=map(b);List<NetworkEvent>e=new ArrayList<>();for(var z:y.entrySet())if(!x.containsKey(z.getKey()))e.add(new NetworkEvent("APPEARED",z.getValue()));else if(changed(x.get(z.getKey()),z.getValue()))e.add(new NetworkEvent("CHANGED",z.getValue()));for(var z:x.entrySet())if(!y.containsKey(z.getKey()))e.add(new NetworkEvent("DISAPPEARED",z.getValue()));return e;}private Map<String,Device>map(List<Device>l){Map<String,Device>m=new HashMap<>();for(Device d:l)m.put(d.getIpAddress(),d);return m;}private boolean changed(Device a,Device b){return !Objects.equals(a.getMacAddress(),b.getMacAddress())||!Objects.equals(a.serviceSignature(),b.serviceSignature())||!Objects.equals(a.getHostname(),b.getHostname())||!Objects.equals(a.getType(),b.getType());}}
+
+import com.lantern.model.Device;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+public class NetworkMonitor {
+
+    /**
+     * Compares two network scans and detects:
+     *
+     * - Devices that appeared
+     * - Devices that disappeared
+     * - Devices whose information changed
+     */
+    public List<NetworkEvent> compare(
+            List<Device> previousDevices,
+            List<Device> currentDevices
+    ) {
+
+        Map<String, Device> previous =
+                mapByIpAddress(previousDevices);
+
+        Map<String, Device> current =
+                mapByIpAddress(currentDevices);
+
+        List<NetworkEvent> events =
+                new ArrayList<>();
+
+        // Find new and changed devices.
+        for (Map.Entry<String, Device> entry :
+                current.entrySet()) {
+
+            String ipAddress = entry.getKey();
+            Device currentDevice = entry.getValue();
+
+            if (!previous.containsKey(ipAddress)) {
+
+                events.add(
+                        new NetworkEvent(
+                                "APPEARED",
+                                currentDevice
+                        )
+                );
+
+                continue;
+            }
+
+            Device previousDevice =
+                    previous.get(ipAddress);
+
+            if (hasChanged(
+                    previousDevice,
+                    currentDevice
+            )) {
+
+                events.add(
+                        new NetworkEvent(
+                                "CHANGED",
+                                currentDevice
+                        )
+                );
+            }
+        }
+
+        // Find devices that disappeared.
+        for (Map.Entry<String, Device> entry :
+                previous.entrySet()) {
+
+            String ipAddress = entry.getKey();
+
+            if (!current.containsKey(ipAddress)) {
+
+                events.add(
+                        new NetworkEvent(
+                                "DISAPPEARED",
+                                entry.getValue()
+                        )
+                );
+            }
+        }
+
+        return events;
+    }
+
+    /**
+     * Converts a device list into a map keyed by IP address.
+     */
+    private Map<String, Device> mapByIpAddress(
+            List<Device> devices
+    ) {
+
+        Map<String, Device> devicesByIp =
+                new HashMap<>();
+
+        for (Device device : devices) {
+            devicesByIp.put(
+                    device.getIpAddress(),
+                    device
+            );
+        }
+
+        return devicesByIp;
+    }
+
+    /**
+     * Determines whether relevant device information
+     * changed between two scans.
+     */
+    private boolean hasChanged(
+            Device previous,
+            Device current
+    ) {
+
+        return !Objects.equals(
+                    previous.getMacAddress(),
+                    current.getMacAddress()
+                )
+                || !Objects.equals(
+                    previous.serviceSignature(),
+                    current.serviceSignature()
+                )
+                || !Objects.equals(
+                    previous.getHostname(),
+                    current.getHostname()
+                )
+                || !Objects.equals(
+                    previous.getType(),
+                    current.getType()
+                );
+    }
+}

@@ -1,24 +1,124 @@
 package com.lantern.network;
 
-import com.lantern.model.Device;
 import com.lantern.model.Service;
+import java.util.List;
 import java.util.Locale;
 
 public class DeviceClassifier {
-    public String classify(String hostname, java.util.List<Service> services) {
-        String h = hostname == null ? "" : hostname.toLowerCase(Locale.ROOT);
-        boolean smb = has(services,445) || has(services,139);
-        boolean ssh = has(services,22);
-        boolean web = has(services,80) || has(services,443) || has(services,8080) || has(services,8096);
-        if (h.contains("router") || h.contains("gateway") || h.contains("gw")) return "Router/Gateway";
-        if (h.contains("nas") || (smb && ssh)) return "NAS/Server";
-        if (h.contains("printer") || h.contains("print")) return "Printer";
-        if (h.contains("phone") || h.contains("iphone") || h.contains("android")) return "Phone";
-        if (h.contains("tv") || h.contains("roku") || h.contains("chromecast") || h.contains("firetv")) return "TV/Media";
-        if (ssh && !web) return "Server/Linux";
-        if (web) return "Web Device";
-        if (smb) return "Windows/File Device";
+
+    public String classify(
+            String hostname,
+            List<Service> services
+    ) {
+
+        String normalizedHostname =
+                hostname == null
+                        ? ""
+                        : hostname.toLowerCase(
+                                Locale.ROOT
+                        );
+
+        boolean hasSmb =
+                hasPort(services, 445)
+                        || hasPort(services, 139);
+
+        boolean hasSsh =
+                hasPort(services, 22);
+
+        boolean hasWeb =
+                hasPort(services, 80)
+                        || hasPort(services, 443)
+                        || hasPort(services, 8080)
+                        || hasPort(services, 8096);
+
+        if (containsAny(
+                normalizedHostname,
+                "router",
+                "gateway",
+                "gw"
+        )) {
+            return "Router/Gateway";
+        }
+
+        if (normalizedHostname.contains("nas")
+                || (hasSmb && hasSsh)) {
+
+            return "NAS/Server";
+        }
+
+        if (containsAny(
+                normalizedHostname,
+                "printer",
+                "print"
+        )) {
+            return "Printer";
+        }
+
+        if (containsAny(
+                normalizedHostname,
+                "phone",
+                "iphone",
+                "android"
+        )) {
+            return "Phone";
+        }
+
+        if (containsAny(
+                normalizedHostname,
+                "tv",
+                "roku",
+                "chromecast",
+                "firetv"
+        )) {
+            return "TV/Media";
+        }
+
+        if (hasSsh && !hasWeb) {
+            return "Server/Linux";
+        }
+
+        if (hasWeb) {
+            return "Web Device";
+        }
+
+        if (hasSmb) {
+            return "Windows/File Device";
+        }
+
         return "Unknown Device";
     }
-    private boolean has(java.util.List<Service> s,int p){return s.stream().anyMatch(x->x.port()==p);}
+
+    /**
+     * Checks whether a device exposes a specific port.
+     */
+    private boolean hasPort(
+            List<Service> services,
+            int port
+    ) {
+
+        return services.stream()
+                .anyMatch(
+                        service ->
+                                service.port() == port
+                );
+    }
+
+    /**
+     * Checks whether the hostname contains
+     * any of the supplied keywords.
+     */
+    private boolean containsAny(
+            String hostname,
+            String... keywords
+    ) {
+
+        for (String keyword : keywords) {
+
+            if (hostname.contains(keyword)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
