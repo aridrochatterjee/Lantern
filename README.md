@@ -2,6 +2,27 @@
 
 Lantern is a local network observatory for homelabs and networks you own or are authorized to administer. **v1.1 adds Admin Mode**: an explicitly paired Lantern Agent can expose deeper host telemetry and optional, permission-scoped administration capabilities.
 
+
+
+# Tech Stack
+- Java 26
+- Java HTTP Server
+- HTML / CSS / JavaScript
+- Linux networking tools
+- TCP / ICMP / ARP
+- JSON APIs
+# Key Features
+- LAN device discovery
+- IP, MAC & hostname detection
+- Port & service scanning
+- Latency monitoring
+- Live network dashboard
+- Device history & events
+- Lantern Agent for system telemetry
+- Authenticated Agent pairing
+- CPU, RAM, disk, uptime & process telemetry
+- Optional Admin capabilities for explicitly authorized machines
+
 ## v1.1 highlights
 
 - Black + lime command-center web UI, preserving the supplied Lantern observatory frontend.
